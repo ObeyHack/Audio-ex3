@@ -1,0 +1,6 @@
+/.venv/
+/.idea/
+/.env/
+/.ipynb_checkpoints/
+.DS_Store
+*.pyc
