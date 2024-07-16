@@ -45,7 +45,7 @@ def get_paths(set, root_path):
     return paths
 
 
-def get_set(set, root_path="../data"):
+def get_set(set, root_path="data"):
     paths = get_paths(set, root_path)
     Y = []
     for i in range(len(zero_to_eight)):
