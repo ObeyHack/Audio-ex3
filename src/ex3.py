@@ -1,5 +1,5 @@
 import numpy as np
-
+import sys
 
 def p2z(p, blank):
     z = [blank]
@@ -72,7 +72,7 @@ def print_p(p: float):
 
 
 if __name__ == '__main__':
-    path = "mat.npy"
-    labels = "aaabb"
-    possible_labels = "abc"
-    print_p(ctc(path, labels, possible_labels))
+    path = sys.argv[1]
+    label = sys.argv[2]
+    alphabet = sys.argv[3]
+    print_p(ctc(path, label, alphabet))
