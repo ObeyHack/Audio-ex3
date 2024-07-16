@@ -25,6 +25,7 @@ class NeuralNetwork(nn.Module):
         return x
 
 
+
 def main():
     model = NeuralNetwork().to(device)
     data_loaders = loader.load_data()
