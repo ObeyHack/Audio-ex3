@@ -73,10 +73,10 @@ def load_data():
 
     # Define the dataloaders
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=BATCH_SIZE, shuffle=True, )
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
-    return {'train': train_loader, 'validation': validation_loader, 'test': test_loader}
+    return {'train': train_loader, 'val': validation_loader, 'test': test_loader}
 
 
 if __name__ == '__main__':
