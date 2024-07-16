@@ -5,3 +5,4 @@
 .DS_Store
 *.pyc
 src/lightning_logs/version_0/hparams.yaml
+*.yaml
