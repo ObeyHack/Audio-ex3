@@ -8,7 +8,8 @@ import lightning as L
 class NeuralNetwork(L.LightningModule):
     def __init__(self):
         super(NeuralNetwork, self).__init__()
-        self.lstm = nn.LSTM(20, 20, 2, bidirectional=True)
+        self.cnv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(3, 3), padding=1)
+    
         self.linear = nn.Linear(40, 9)
         self.lr = 0.001
 
