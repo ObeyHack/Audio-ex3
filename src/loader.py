@@ -82,6 +82,8 @@ def decode_digit_probs(encoded_digit: torch.Tensor):
         return torch.tensor([_decode_digit_probs_not_batched(encoded_digit[:, i, :]) for i in range(encoded_digit.shape[1])])
 
 
+# TODO: decode the digit from encoded digit. signature decode_digit(encoded_digit: torch.Tensor) -> int
+# TODO: decode the digit from the probabilities by calling decode_digit. signature decode_digit_probs(encoded_digit_probs: torch.Tensor) -> int
 
 
 
