@@ -14,6 +14,7 @@ class NeuralNetwork(L.LightningModule):
 
         self.cnv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(3, 3), padding=1)
         self.relu = nn.ReLU()
+        self.loss = nn.CTCLoss()
         self.lr = 0.001
 
     def forward(self, x):
@@ -40,15 +41,15 @@ class NeuralNetwork(L.LightningModule):
         """
         batch_size = y_hat.shape[1]
         #write y as the words of the numbers
-        y = [loader.encode_digit(y_i) for y_i in y]
+        encoded_y = [loader.encode_digit(y_i.item()) for y_i in y]
+        # label_length is the length of the text label. In our case is the length of the word
+        label_length = [len(y_i) for y_i in encoded_y]
 
         # The input length is number of time steps
         input_lengths = torch.full(size=(batch_size,), fill_value=loader.TIME_STEPS, dtype=torch.long)
 
-        # label_length is the length of the text label. In our case is the length of the word
-        # label_length = torch.tensor([len(loader.zero_to_eight[y_i]) for y_i in y])
-        label_length = torch.tensor([len(loader.zero_to_eight[y_i]) for y_i in y])
-        return nn.CTCLoss(y_hat, y, input_lengths, label_length)
+
+        return self.loss(y_hat, y, input_lengths, label_length)
 
 
     def training_step(self, batch, batch_idx):
