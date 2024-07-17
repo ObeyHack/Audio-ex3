@@ -7,11 +7,9 @@ import lightning as L
 class NeuralNetwork(L.LightningModule):
     def __init__(self):
         super(NeuralNetwork, self).__init__()
-        # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the number of time steps
+        # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
-
         self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=loader.CLASSES, batch_first=True)
-
         self.cnv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(3, 3), padding=1)
         self.relu = nn.ReLU()
         self.loss = nn.CTCLoss()
@@ -30,7 +28,7 @@ class NeuralNetwork(L.LightningModule):
         return x
 
 
-    def _CTCLoss(self, y_hat, y):
+    def CTCLoss(self, y_hat, y):
         """
         :param y_hat: The predicted values, shape (T, N, C) where T is TimeSteps, N is the batch size and
                         C is the number of classes.
@@ -40,10 +38,9 @@ class NeuralNetwork(L.LightningModule):
         :return: The CTC loss.
         """
         batch_size = y_hat.shape[1]
-
         # label_length is the length of the text label. In our case is the length of the word
+        # find where the padding starts
         label_length = torch.tensor([len(y_i) for y_i in y], dtype=torch.long)
-
         # The input length is number of time steps
         input_lengths = torch.full(size=(batch_size,), fill_value=loader.TIME_STEPS, dtype=torch.long)
 
@@ -53,26 +50,26 @@ class NeuralNetwork(L.LightningModule):
         x, y = batch
         y_hat = self(x)
         # calculate the loss
-        loss = self._CTCLoss(y_hat, y)
+        loss = self.CTCLoss(y_hat, y)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = nn.CTCLoss(y_hat, y)
+        loss = self.CTCLoss(y_hat, y)
 
         digits = loader.decode_digit(y)
         digits_hat = loader.decode_digit(y_hat)
 
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
-        self.log_dict({'val_loss': loss, 'val_acc': acc})
+        self.log_dict({'val_loss': loss, 'val_acc': acc.item()})
 
         return loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = self._CTCLoss(y_hat, y)
+        loss = self.CTCLoss(y_hat, y)
         return loss
 
     def configure_optimizers(self):

@@ -18,6 +18,9 @@ PADDING_VALUE = 0                                      # Padding value for the i
 MFCC_FEATURES = 20                                     # Number of MFCC features
 
 
+########################################################################################################################
+################################################# Encode/Decode ########################################################
+########################################################################################################################
 
 def encode_digit(digit: int):
     """
@@ -74,6 +77,9 @@ def decode_digit(encoded_digit: torch.Tensor):
         return torch.tensor([_decode_digit_not_batched(encoded_digit[:, i, :]) for i in range(encoded_digit.shape[1])])
 
 
+########################################################################################################################
+################################################# Data Loader ##########################################################
+########################################################################################################################
 
 class data_set(data.Dataset):
     def __init__(self,X,Y):
@@ -126,7 +132,7 @@ def get_set(set, root_path="data"):
             X.append(extract_mfcc(file))
     X = np.array(X)
 
-    Y_pad = nn.utils.rnn.pad_sequence(Y, batch_first=True, padding_value=CLASSES)
+    Y_pad = nn.utils.rnn.pad_sequence(Y, batch_first=True, padding_value=PADDING_VALUE)
     return torch.tensor(X), Y_pad
 
 
