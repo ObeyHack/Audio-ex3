@@ -42,7 +42,7 @@ def encode_digit(digit: int):
     return encoded_digit
 
 
-def _decode_digit_not_batched(encoded_digit: torch.Tensor):
+def _decode_digit_probs_not_batched(encoded_digit: torch.Tensor):
     """
     pick the most probable class for each time step and decode the digit from the classes, if it
     a blank size continue to the next time step
@@ -70,16 +70,22 @@ def _decode_digit_not_batched(encoded_digit: torch.Tensor):
     return digit
 
 
-def decode_digit(encoded_digit: torch.Tensor):
+def decode_digit_probs(encoded_digit: torch.Tensor):
     """
     Wrapper function for _decode_digit_not_batched,
     :param encoded_digit: shape (T, C) or (T, N, C)
     :return: (,) or (N,) tensor with the decoded digits
     """
     if len(encoded_digit.shape) == 2:
-        return _decode_digit_not_batched(encoded_digit)
+        return _decode_digit_probs_not_batched(encoded_digit)
     else:
-        return torch.tensor([_decode_digit_not_batched(encoded_digit[:, i, :]) for i in range(encoded_digit.shape[1])])
+        return torch.tensor([_decode_digit_probs_not_batched(encoded_digit[:, i, :]) for i in range(encoded_digit.shape[1])])
+
+
+
+
+
+def decode_digit_probs(encoded_digit: torch.Tensor):
 
 
 def _un_pad_not_batched(y):
@@ -110,17 +116,6 @@ def un_pad(y):
 ########################################################################################################################
 ################################################# Data Loader ##########################################################
 ########################################################################################################################
-
-class data_set(data.Dataset):
-    def __init__(self,X,Y):
-        self.X = X                           # set data
-        self.Y = Y                           # set lables
-
-    def __len__(self):
-        return len(self.X)                   # return length
-
-    def __getitem__(self, idx):
-        return [self.X[idx], self.Y[idx]]
 
 
 def extract_mfcc(file_path):
@@ -198,7 +193,7 @@ class AudioDataModule(L.LightningDataModule):
             train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
             self.train_loader = train_loader
 
-        if stage == "validate":
+        if stage == "validate" or stage == "fit":
             validation_X, validation_Y = get_set('val', self.data_dir)
             validation_dataset = torch.utils.data.TensorDataset(validation_X, validation_Y)
             validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -209,6 +204,8 @@ class AudioDataModule(L.LightningDataModule):
             test_dataset = torch.utils.data.TensorDataset(test_X, test_Y)
             test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
             self.test_loader = test_loader
+
+        print(stage)
 
     def train_dataloader(self):
         return self.train_loader
