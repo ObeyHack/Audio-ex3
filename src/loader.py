@@ -17,6 +17,35 @@ PADDING_VALUE = 0                                      # Padding value for the i
 MFCC_FEATURES = 20                                     # Number of MFCC features
 
 
+
+def encode_digit(digit: int):
+    """
+    Encode the digit i into a tensor base on digit word size,
+    Ascii(a) = 97, Ascii(z) = 122
+    :param digit: The digit to encode
+    :return: The tensor of size CLASSES
+    """
+    encoded_digit = torch.zeros(len(zero_to_eight[digit]))
+    for i in range(len(encoded_digit)):
+        char_i = zero_to_eight[digit][i]
+        # encode the character
+        encoded_digit[i] = ord(char_i) - 96
+    return encoded_digit
+
+
+def decode_digit(encoded_digit: torch.Tensor):
+    """
+    Decode the encoded digit
+    :param encoded_digit: The encoded digit
+    :return: The decoded digit as number
+    """
+    decoded_digit = ''
+    for i in range(len(encoded_digit)):
+        decoded_digit += chr(int(encoded_digit[i]) + 96)
+    # turn digit string to number
+    digit = list(zero_to_eight.values()).index(decoded_digit)
+    return digit
+
 class data_set(data.Dataset):
     def __init__(self,X,Y):
         self.X = X                           # set data
