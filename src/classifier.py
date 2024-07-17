@@ -25,7 +25,7 @@ class NeuralNetwork(L.LightningModule):
         self.lr = 0.001
 
     def forward(self, x):
-        x, _ = self.lstm(x)
+        x = self.cnv(x)
         x = self.linear(x)
         return x
 
