@@ -88,11 +88,11 @@ class NeuralNetwork(L.LightningModule):
 
 
 def main():
-    data_module = loader.AudioDataModule()
+    data_loader = loader.load_data()
     model = NeuralNetwork()
     trainer = L.Trainer(accelerator="auto", devices="auto", strategy="auto")
-    trainer.fit(model, data_module)
-    trainer.test(model, data_module)
+    trainer.fit(model, data_loader['train'], data_loader['val'])
+    trainer.test(model, data_loader['test'])
 
 
 if __name__ == '__main__':
