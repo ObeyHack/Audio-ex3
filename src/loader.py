@@ -6,8 +6,9 @@ from librosa.feature import mfcc
 from torch.utils import data
 
 zero_to_eight = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight'}
-BATCH_SIZE = 16     # Batch size
-T = 16000           # Input sequence length
+BATCH_SIZE = 16                                 # Batch size
+INPUT_LENGTH = 16000                            # Input sequence length
+CLASSES = len(zero_to_eight)+1                  # Number of classes (including blank)
 
 class data_set(data.Dataset):
     def __init__(self,X,Y):
@@ -24,8 +25,8 @@ class data_set(data.Dataset):
 def extract_mfcc(file_path):
     y, sr = librosa.load(file_path, sr=None)
     # pad the signal to have the same length if it is shorter than T
-    if len(y) < T:
-        y = np.pad(y, (0, T - len(y)), 'constant')
+    if len(y) < INPUT_LENGTH:
+        y = np.pad(y, (0, INPUT_LENGTH - len(y)), 'constant')
     return mfcc(y=y, sr=sr)
 
 
