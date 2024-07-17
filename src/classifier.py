@@ -22,24 +22,22 @@ class NeuralNetwork(L.LightningModule):
         # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the number of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
 
-        self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=10, num_layers=1, batch_first=True)
+        self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=loader.CLASSES, batch_first=True)
 
         self.cnv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(3, 3), padding=1)
         self.relu = nn.ReLU()
-        self.softmax = nn.Softmax()
         self.lr = 0.001
 
     def forward(self, x):
+        x = x.permute(0, 2, 1)
         x = self.lstm(x)
-
-
-
+        x = x[0]
         x = x[:, None, :, :]
         x = self.cnv(x)
-        # add pooling
-        x = self.max_pooling(x)
-        # vectorize the output
-        x = x.view(x.size(0), -1)
+        # squeeze the output
+        x = x.squeeze(1)
+        nn.functional.log_softmax(x, dim=2)
+        x = x.permute(1, 0, 2)
         return x
 
 
@@ -53,6 +51,8 @@ class NeuralNetwork(L.LightningModule):
         :return: The CTC loss.
         """
         batch_size = y_hat.shape[1]
+        #write y as the words of the numbers
+        y= torch.tensor([loader.zero_to_eight[y_i] for y_i in y])
 
         # The input length is number of time steps
         input_lengths = torch.full(size=(batch_size,), fill_value=loader.TIME_STEPS, dtype=torch.long)
