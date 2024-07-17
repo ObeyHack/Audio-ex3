@@ -21,7 +21,7 @@ S_max = max([len(i) for i in zero_to_eight.values()])  # Maximum target length, 
                                                             # longest word is 'three' with 5 letters
 PADDING_VALUE = 0                                      # Padding value for the input sequence
 MFCC_FEATURES = 20                                     # Number of MFCC features
-BLANK_LABEL = 26                                       # Blank label for CTC loss
+BLANK_LABEL = 27                                       # Blank label for CTC loss
 
 
 ########################################################################################################################
@@ -51,9 +51,9 @@ def _decode_digit_not_batched(encoded_digit: torch.Tensor):
     """
     decoded_digit = ''
     for i in range(len(encoded_digit)):
-        decoded_digit_i = encoded_digit[i].item()
+        decoded_digit_i = int(encoded_digit[i].item())
 
-        if decoded_digit_i == BLANK_LABEL:
+        if decoded_digit_i == BLANK_LABEL or decoded_digit_i == PADDING_VALUE:
             continue
 
         # turn class to character
@@ -76,7 +76,7 @@ def decode_digit(encoded_digit: torch.Tensor):
     if len(encoded_digit.shape) == 1:
         return _decode_digit_not_batched(encoded_digit)
     else:
-        return torch.tensor([_decode_digit_not_batched(encoded_digit[i, :]) for i in range(encoded_digit.shape[1])])
+        return torch.tensor([_decode_digit_not_batched(encoded_digit[i, :]) for i in range(encoded_digit.shape[0])])
 
 
 def _un_pad_not_batched(y):
@@ -163,7 +163,8 @@ def load_data():
     test_dataset = torch.utils.data.TensorDataset(test_X, test_Y)
 
     # Define the dataloaders
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=11)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=11,
+                                               persistent_workers=True)
     validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=BATCH_SIZE, shuffle=False,
                                                     num_workers=11, persistent_workers=True)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=11,
