@@ -4,4 +4,4 @@
 /.ipynb_checkpoints/
 .DS_Store
 *.pyc
-*.yaml
+/src/lightning_logs/
