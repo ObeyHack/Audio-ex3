@@ -6,9 +6,16 @@ from librosa.feature import mfcc
 from torch.utils import data
 
 zero_to_eight = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight'}
-BATCH_SIZE = 16                                 # Batch size
-INPUT_LENGTH = 16000                            # Input sequence length
-CLASSES = len(zero_to_eight)+1                  # Number of classes (including blank)
+BATCH_SIZE = 16                                        # Batch size
+TIME_STEPS = 32                                        # Input sequence length
+CLASSES = 26+1                                         # Number of classes (including blank)
+S_min = min([len(i) for i in zero_to_eight.values()])  # Minimum target length, for demonstration purposes,
+                                                            # shortest word is 'one' with 3 letters
+S_max = max([len(i) for i in zero_to_eight.values()])  # Maximum target length, for demonstration purposes,
+                                                            # longest word is 'three' with 5 letters
+PADDING_VALUE = 0                                      # Padding value for the input sequence
+MFCC_FEATURES = 20                                     # Number of MFCC features
+
 
 class data_set(data.Dataset):
     def __init__(self,X,Y):
@@ -24,10 +31,12 @@ class data_set(data.Dataset):
 
 def extract_mfcc(file_path):
     y, sr = librosa.load(file_path, sr=None)
+    y_mfcc = librosa.feature.mfcc(y=y, sr=sr)
+
     # pad the signal to have the same length if it is shorter than T
-    if len(y) < INPUT_LENGTH:
-        y = np.pad(y, (0, INPUT_LENGTH - len(y)), 'constant')
-    return mfcc(y=y, sr=sr)
+    if y_mfcc.shape[1] < TIME_STEPS:
+        y_mfcc = np.pad(y_mfcc, ((0, 0), (0, TIME_STEPS - y_mfcc.shape[1])), 'constant')
+    return y_mfcc
 
 
 def get_paths(set, root_path):
