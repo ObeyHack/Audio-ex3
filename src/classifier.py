@@ -13,43 +13,52 @@ def cnn_output_shape(W, K, P, S):
     :param S: Padding
     :return: The output size
     """
-    return (((W - K + 2*P)/S) + 1)
+    return (((W - K + 2 * P) / S) + 1)
 
 
 class NeuralNetwork(L.LightningModule):
     def __init__(self):
         super(NeuralNetwork, self).__init__()
         self.cnv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(3, 3), padding=1)
-        self.linear = nn.Linear(40, 9)
+        self.max_pooling= nn.MaxPool2d(2, 2)
+        self.linear = nn.Linear(2560, loader.CLASSES)
         self.softmax = nn.Softmax()
         self.lr = 0.001
 
     def forward(self, x):
         x = self.cnv(x)
+        # add pooling
+        x = self.max_pooling(x)
+        # vectorize the output
+        x = x.view(x.size(0), -1)
+        #flatten the output
+        x= x.flatten()
         x = self.linear(x)
         return x
 
     def training_step(self, batch, batch_idx):
         x, y = batch
+        x = x[:, None, :, :]
         y_hat = self(x)
         loss = nn.CTCLoss(y_hat, y)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
+        x = x[:, None, :, :]
         y_hat = self(x)
         loss = nn.CTCLoss(y_hat, y)
         return loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch
+        x = x[:, None, :, :]
         y_hat = self(x)
         loss = nn.CTCLoss(y_hat, y)
         return loss
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
-
 
 
 def main():
