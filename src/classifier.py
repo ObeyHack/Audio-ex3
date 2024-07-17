@@ -4,18 +4,6 @@ import loader
 import lightning as L
 
 
-def cnn_output_shape(W, K, P, S):
-    """
-    (((W - K + 2P)/S) + 1)
-    :param W: Input size
-    :param K: Filter size
-    :param P: Stride
-    :param S: Padding
-    :return: The output size
-    """
-    return (((W - K + 2 * P) / S) + 1)
-
-
 class NeuralNetwork(L.LightningModule):
     def __init__(self):
         super(NeuralNetwork, self).__init__()
@@ -52,7 +40,7 @@ class NeuralNetwork(L.LightningModule):
         """
         batch_size = y_hat.shape[1]
         #write y as the words of the numbers
-        y= torch.tensor([loader.zero_to_eight[y_i] for y_i in y])
+        y = [loader.encode_digit(y_i) for y_i in y]
 
         # The input length is number of time steps
         input_lengths = torch.full(size=(batch_size,), fill_value=loader.TIME_STEPS, dtype=torch.long)
