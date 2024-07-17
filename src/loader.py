@@ -21,6 +21,7 @@ S_max = max([len(i) for i in zero_to_eight.values()])  # Maximum target length, 
                                                             # longest word is 'three' with 5 letters
 PADDING_VALUE = 0                                      # Padding value for the input sequence
 MFCC_FEATURES = 20                                     # Number of MFCC features
+BLANK_LABEL = 26                                       # Blank label for CTC loss
 
 
 ########################################################################################################################
@@ -52,7 +53,7 @@ def _decode_digit_not_batched(encoded_digit: torch.Tensor):
     for i in range(len(encoded_digit)):
         decoded_digit_i = encoded_digit[i].item()
 
-        if decoded_digit_i == 0:
+        if decoded_digit_i == BLANK_LABEL:
             continue
 
         # turn class to character
@@ -69,10 +70,10 @@ def _decode_digit_not_batched(encoded_digit: torch.Tensor):
 def decode_digit(encoded_digit: torch.Tensor):
     """
     Wrapper function for _decode_digit_not_batched,
-    :param encoded_digit: shape (N, T) or (T,)
+    :param encoded_digit: shape (N, X) or (X,) where X is the length of the word (X<=T)
     :return: (,) or (N,) tensor with the decoded digits
     """
-    if len(encoded_digit.shape) == 2:
+    if len(encoded_digit.shape) == 1:
         return _decode_digit_not_batched(encoded_digit)
     else:
         return torch.tensor([_decode_digit_not_batched(encoded_digit[i, :]) for i in range(encoded_digit.shape[1])])
