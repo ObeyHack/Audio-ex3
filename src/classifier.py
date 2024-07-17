@@ -40,22 +40,18 @@ class NeuralNetwork(L.LightningModule):
         :return: The CTC loss.
         """
         batch_size = y_hat.shape[1]
-        #write y as the words of the numbers
-        encoded_y = [loader.encode_digit(y_i.item()) for y_i in y]
+
         # label_length is the length of the text label. In our case is the length of the word
-        label_length = torch.tensor([len(y_i) for y_i in encoded_y], dtype=torch.long)
+        label_length = torch.tensor([len(y_i) for y_i in y], dtype=torch.long)
 
         # The input length is number of time steps
         input_lengths = torch.full(size=(batch_size,), fill_value=loader.TIME_STEPS, dtype=torch.long)
-        encoded_y = torch.stack(encoded_y)
 
-        return self.loss(y_hat, encoded_y, input_lengths, label_length)
-
+        return self.loss(y_hat, y, input_lengths, label_length)
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-
         # calculate the loss
         loss = self._CTCLoss(y_hat, y)
         return loss
@@ -64,6 +60,13 @@ class NeuralNetwork(L.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = nn.CTCLoss(y_hat, y)
+
+        digits = loader.decode_digit(y)
+        digits_hat = loader.decode_digit(y_hat)
+
+        acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
+        self.log_dict({'val_loss': loss, 'val_acc': acc})
+
         return loss
 
     def test_step(self, batch, batch_idx):
