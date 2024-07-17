@@ -5,6 +5,11 @@ import torch
 from librosa.feature import mfcc
 from torch import nn
 from torch.utils import data
+import lightning as L
+
+########################################################################################################################
+################################################# Constants ############################################################
+########################################################################################################################
 
 zero_to_eight = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight'}
 BATCH_SIZE = 16                                        # Batch size
@@ -77,6 +82,31 @@ def decode_digit(encoded_digit: torch.Tensor):
         return torch.tensor([_decode_digit_not_batched(encoded_digit[:, i, :]) for i in range(encoded_digit.shape[1])])
 
 
+def _un_pad_not_batched(y):
+    """
+    Remove the padding from the label
+    :param y: Shape (S,)
+    :return: Shape (X,) where X <= S
+    """
+    un_pad_i = -1
+    for i in range(len(y), 0, -1):
+        if y[i - 1] != PADDING_VALUE:
+            un_pad_i = i
+            break
+
+    return y[:un_pad_i]
+
+def un_pad(y):
+    """
+    Remove the padding from the label
+    :param y: Shape (N, S) or (S,)
+    :return: Shape (N, X) or (X,) where X <= S
+    """
+    if len(y.shape) == 1:
+        return _un_pad_not_batched(y).tolist()
+    else:
+        return [_un_pad_not_batched(y[i]) for i in range(y.shape[0])]
+
 ########################################################################################################################
 ################################################# Data Loader ##########################################################
 ########################################################################################################################
@@ -147,12 +177,48 @@ def load_data():
     test_dataset = torch.utils.data.TensorDataset(test_X, test_Y)
 
     # Define the dataloaders
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=11)
     validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=BATCH_SIZE, shuffle=False,
                                                     num_workers=11, persistent_workers=True)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=11)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=11,
+                                              persistent_workers=True)
 
     return {'train': train_loader, 'val': validation_loader, 'test': test_loader}
+
+
+class AudioDataModule(L.LightningDataModule):
+    def __init__(self, data_dir: str = "data"):
+        super().__init__()
+        self.data_dir = data_dir
+
+    def setup(self, stage: str) -> None:
+        if stage == "fit":
+            train_X, train_Y = get_set('train', self.data_dir)
+            train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
+            train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+            self.train_loader = train_loader
+
+        if stage == "validate":
+            validation_X, validation_Y = get_set('val', self.data_dir)
+            validation_dataset = torch.utils.data.TensorDataset(validation_X, validation_Y)
+            validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=BATCH_SIZE, shuffle=False)
+            self.val_loader = validation_loader
+
+        if stage == "test":
+            test_X, test_Y = get_set('test', self.data_dir)
+            test_dataset = torch.utils.data.TensorDataset(test_X, test_Y)
+            test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+            self.test_loader = test_loader
+
+    def train_dataloader(self):
+        return self.train_loader
+
+    def val_dataloader(self):
+        return self.val_loader
+
+    def test_dataloader(self):
+        return self.test_loader
+
 
 
 if __name__ == '__main__':

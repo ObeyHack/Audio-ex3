@@ -40,7 +40,9 @@ class NeuralNetwork(L.LightningModule):
         batch_size = y_hat.shape[1]
         # label_length is the length of the text label. In our case is the length of the word
         # find where the padding starts
-        label_length = torch.tensor([len(y_i) for y_i in y], dtype=torch.long)
+        un_padded_y = loader.un_pad(y)
+        label_length = torch.tensor([len(label) for label in un_padded_y]) * torch.ones(batch_size, dtype=torch.long)
+
         # The input length is number of time steps
         input_lengths = torch.full(size=(batch_size,), fill_value=loader.TIME_STEPS, dtype=torch.long)
 
@@ -51,6 +53,9 @@ class NeuralNetwork(L.LightningModule):
         y_hat = self(x)
         # calculate the loss
         loss = self.CTCLoss(y_hat, y)
+
+        # log the loss
+        self.log_dict({'train_loss': loss.item()})
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -62,7 +67,7 @@ class NeuralNetwork(L.LightningModule):
         digits_hat = loader.decode_digit(y_hat)
 
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
-        self.log_dict({'val_loss': loss, 'val_acc': acc.item()})
+        self.log_dict({'val_loss': loss.item(), 'val_acc': acc.item()})
 
         return loss
 
@@ -70,6 +75,12 @@ class NeuralNetwork(L.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.CTCLoss(y_hat, y)
+
+        digits = loader.decode_digit(y)
+        digits_hat = loader.decode_digit(y_hat)
+
+        acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
+        self.log_dict({'test_loss': loss.item(), 'test_acc': acc.item()})
         return loss
 
     def configure_optimizers(self):
@@ -77,11 +88,11 @@ class NeuralNetwork(L.LightningModule):
 
 
 def main():
-    data_loader = loader.load_data()
+    data_module = loader.AudioDataModule()
     model = NeuralNetwork()
     trainer = L.Trainer(accelerator="auto", devices="auto", strategy="auto")
-    trainer.fit(model, data_loader['train'], data_loader['val'])
-    trainer.test(model, data_loader['test'])
+    trainer.fit(model, data_module)
+    trainer.test(model, data_module)
 
 
 if __name__ == '__main__':
