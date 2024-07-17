@@ -43,13 +43,13 @@ class NeuralNetwork(L.LightningModule):
         #write y as the words of the numbers
         encoded_y = [loader.encode_digit(y_i.item()) for y_i in y]
         # label_length is the length of the text label. In our case is the length of the word
-        label_length = [len(y_i) for y_i in encoded_y]
+        label_length = torch.tensor([len(y_i) for y_i in encoded_y], dtype=torch.long)
 
         # The input length is number of time steps
         input_lengths = torch.full(size=(batch_size,), fill_value=loader.TIME_STEPS, dtype=torch.long)
+        encoded_y = torch.stack(encoded_y)
 
-
-        return self.loss(y_hat, y, input_lengths, label_length)
+        return self.loss(y_hat, encoded_y, input_lengths, label_length)
 
 
     def training_step(self, batch, batch_idx):
