@@ -14,7 +14,7 @@ import lightning as L
 zero_to_eight = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight'}
 BATCH_SIZE = 16                                        # Batch size
 TIME_STEPS = 32                                        # Input sequence length
-CLASSES = 26+2                                         # Number of classes (including blank and end of sequence)
+CLASSES = 26+1                                         # Number of classes (including blank)
 S_min = min([len(i) for i in zero_to_eight.values()])  # Minimum target length, for demonstration purposes,
                                                             # shortest word is 'one' with 3 letters
 S_max = max([len(i) for i in zero_to_eight.values()])  # Maximum target length, for demonstration purposes,
@@ -88,6 +88,24 @@ def decode_digit_probs(encoded_digit: torch.Tensor):
 
 
 def decode_digit_probs(encoded_digit: torch.Tensor):
+    """
+    decode the digit and skip blank
+    :param encoded_digit:
+    :return:
+    """
+    decoded_digit = ''
+    for i in range(len(encoded_digit)):
+        char_encoded = encoded_digit[i].item()
+
+        # turn class to character
+        decoded_digit += chr(char_encoded + 96)
+
+    # turn digit string to number
+    vals = list(zero_to_eight.values())
+    if decoded_digit not in vals:
+        return -1
+    digit = list(zero_to_eight.values()).index(decoded_digit)
+    return digit
 
 
 def _un_pad_not_batched(y):

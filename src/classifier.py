@@ -48,11 +48,26 @@ class NeuralNetwork(L.LightningModule):
 
         return self.loss(y_hat, y, input_lengths, label_length)
 
+
+    def argmax_prob(self, y_hat):
+        """
+        pick the most probable class for each time step and decode the digit from the classes
+        :param y_hat: shape (T, C) or (T, N, C)
+        :return: (,) or (N,) tensor with the decoded digits
+        """
+        if len(y_hat.shape) == 2:
+            return torch.argmax(y_hat, dim=1)
+        else:
+            return torch.stack([torch.argmax(y_hat[:, i, :], dim=1) for i in range(y_hat.shape[1])])
+
+
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         # calculate the loss
         loss = self.CTCLoss(y_hat, y)
+
+        argmax_y_hat = self.argmax_prob(y_hat)
 
         # log the loss
         self.log_dict({'train_loss': loss.item()})
@@ -91,7 +106,8 @@ def main():
     data_loader = loader.load_data()
     model = NeuralNetwork()
     trainer = L.Trainer(accelerator="auto", devices="auto", strategy="auto")
-    trainer.fit(model, data_loader['train'], data_loader['val'])
+    trainer.fit(model, data_loader['train'])
+    # trainer.fit(model, data_loader['train'], data_loader['val'])
     trainer.test(model, data_loader['test'])
 
 

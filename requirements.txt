@@ -3,3 +3,4 @@ tqdm
 torch
 librosa~=0.10.2.post1
 lightning
+jupyter
