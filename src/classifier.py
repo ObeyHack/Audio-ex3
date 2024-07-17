@@ -67,8 +67,6 @@ class NeuralNetwork(L.LightningModule):
         # calculate the loss
         loss = self.CTCLoss(y_hat, y)
 
-        argmax_y_hat = self.argmax_prob(y_hat)
-
         # log the loss
         self.log_dict({'train_loss': loss.item()})
         return loss
@@ -78,8 +76,9 @@ class NeuralNetwork(L.LightningModule):
         y_hat = self(x)
         loss = self.CTCLoss(y_hat, y)
 
+        argmax_y_hat = self.argmax_prob(y_hat)
         digits = loader.decode_digit(y)
-        digits_hat = loader.decode_digit(y_hat)
+        digits_hat = loader.decode_digit(argmax_y_hat)
 
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
         self.log_dict({'val_loss': loss.item(), 'val_acc': acc.item()})
@@ -91,8 +90,9 @@ class NeuralNetwork(L.LightningModule):
         y_hat = self(x)
         loss = self.CTCLoss(y_hat, y)
 
+        argmax_y_hat = self.argmax_prob(y_hat)
         digits = loader.decode_digit(y)
-        digits_hat = loader.decode_digit(y_hat)
+        digits_hat = loader.decode_digit(argmax_y_hat)
 
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
         self.log_dict({'test_loss': loss.item(), 'test_acc': acc.item()})
@@ -106,8 +106,8 @@ def main():
     data_loader = loader.load_data()
     model = NeuralNetwork()
     trainer = L.Trainer(accelerator="auto", devices="auto", strategy="auto")
-    trainer.fit(model, data_loader['train'])
-    # trainer.fit(model, data_loader['train'], data_loader['val'])
+    #trainer.fit(model, data_loader['train'])
+    trainer.fit(model, data_loader['train'], data_loader['val'])
     trainer.test(model, data_loader['test'])
 
 

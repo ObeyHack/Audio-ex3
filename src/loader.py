@@ -42,21 +42,17 @@ def encode_digit(digit: int):
     return encoded_digit
 
 
-def _decode_digit_probs_not_batched(encoded_digit: torch.Tensor):
+def _decode_digit_not_batched(encoded_digit: torch.Tensor):
     """
-    pick the most probable class for each time step and decode the digit from the classes, if it
-    a blank size continue to the next time step
-    :param encoded_digit: matrix of TxC shape, one for each time step a probability distribution
-                        over the classes
+    Decode the digit from the encoded digit
+    :param encoded_digit: (T, )
     :return: The decoded digit as number
     """
     decoded_digit = ''
     for i in range(len(encoded_digit)):
-        probs = encoded_digit[i]
-        # pick the most probable class
-        decoded_digit_i = torch.argmax(probs).item()
-        # if the class is the blank class continue to the next time step
-        if decoded_digit_i == CLASSES:
+        decoded_digit_i = encoded_digit[i].item()
+
+        if decoded_digit_i == 0:
             continue
 
         # turn class to character
@@ -70,42 +66,16 @@ def _decode_digit_probs_not_batched(encoded_digit: torch.Tensor):
     return digit
 
 
-def decode_digit_probs(encoded_digit: torch.Tensor):
+def decode_digit(encoded_digit: torch.Tensor):
     """
     Wrapper function for _decode_digit_not_batched,
-    :param encoded_digit: shape (T, C) or (T, N, C)
+    :param encoded_digit: shape (N, T) or (T,)
     :return: (,) or (N,) tensor with the decoded digits
     """
     if len(encoded_digit.shape) == 2:
-        return _decode_digit_probs_not_batched(encoded_digit)
+        return _decode_digit_not_batched(encoded_digit)
     else:
-        return torch.tensor([_decode_digit_probs_not_batched(encoded_digit[:, i, :]) for i in range(encoded_digit.shape[1])])
-
-
-# TODO: decode the digit from encoded digit. signature decode_digit(encoded_digit: torch.Tensor) -> int
-# TODO: decode the digit from the probabilities by calling decode_digit. signature decode_digit_probs(encoded_digit_probs: torch.Tensor) -> int
-
-
-
-def decode_digit_probs(encoded_digit: torch.Tensor):
-    """
-    decode the digit and skip blank
-    :param encoded_digit:
-    :return:
-    """
-    decoded_digit = ''
-    for i in range(len(encoded_digit)):
-        char_encoded = encoded_digit[i].item()
-
-        # turn class to character
-        decoded_digit += chr(char_encoded + 96)
-
-    # turn digit string to number
-    vals = list(zero_to_eight.values())
-    if decoded_digit not in vals:
-        return -1
-    digit = list(zero_to_eight.values()).index(decoded_digit)
-    return digit
+        return torch.tensor([_decode_digit_not_batched(encoded_digit[i, :]) for i in range(encoded_digit.shape[1])])
 
 
 def _un_pad_not_batched(y):
