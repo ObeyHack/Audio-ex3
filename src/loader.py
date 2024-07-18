@@ -13,7 +13,7 @@ import lightning as L
 
 zero_to_eight = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight'}
 BATCH_SIZE = 16                                        # Batch size
-TIME_STEPS = 32                                        # Input sequence length
+TIME_STEPS = 8                                        # Input sequence length
 CLASSES = 26+1                                         # Number of classes (including blank)
 S_min = min([len(i) for i in zero_to_eight.values()])  # Minimum target length, for demonstration purposes,
                                                             # shortest word is 'one' with 3 letters
@@ -43,6 +43,17 @@ def encode_digit(digit: int):
     return encoded_digit
 
 
+def string_to_int(digit_str: str):
+    """
+    Convert the digit string to a number
+    :param digit_str: The digit string
+    :return: The digit number
+    """
+    vals = list(zero_to_eight.values())
+    if digit_str not in vals:
+        return -1
+    return list(zero_to_eight.values()).index(digit_str)
+
 def _decode_digit_not_batched(encoded_digit: torch.Tensor):
     """
     Decode the digit from the encoded digit
@@ -59,24 +70,23 @@ def _decode_digit_not_batched(encoded_digit: torch.Tensor):
         # turn class to character
         decoded_digit += chr(decoded_digit_i + 96)
 
-    # turn digit string to number
-    vals = list(zero_to_eight.values())
-    if decoded_digit not in vals:
-        return -1
-    digit = list(zero_to_eight.values()).index(decoded_digit)
-    return digit
+    return decoded_digit
 
 
 def decode_digit(encoded_digit: torch.Tensor):
     """
     Wrapper function for _decode_digit_not_batched,
     :param encoded_digit: shape (N, X) or (X,) where X is the length of the word (X<=T)
-    :return: (,) or (N,) tensor with the decoded digits
+    :return: (str, (,)) or (N_str, (N,))
     """
     if len(encoded_digit.shape) == 1:
-        return _decode_digit_not_batched(encoded_digit)
+        decoded = _decode_digit_not_batched(encoded_digit)
+        digit = torch.tensor(string_to_int(decoded))
+        return decoded, digit
     else:
-        return torch.tensor([_decode_digit_not_batched(encoded_digit[i, :]) for i in range(encoded_digit.shape[0])])
+        decoded_batch = [_decode_digit_not_batched(encoded_digit[i, :]) for i in range(encoded_digit.shape[0])]
+        digits = torch.tensor([string_to_int(decoded) for decoded in decoded_batch])
+        return decoded_batch, digits
 
 
 def _un_pad_not_batched(y):
@@ -184,8 +194,6 @@ class AudioDataModule(L.LightningDataModule):
             train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
             train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
             self.train_loader = train_loader
-
-        if stage == "validate" or stage == "fit":
             validation_X, validation_Y = get_set('val', self.data_dir)
             validation_dataset = torch.utils.data.TensorDataset(validation_X, validation_Y)
             validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=BATCH_SIZE, shuffle=False)

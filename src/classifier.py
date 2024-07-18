@@ -101,9 +101,10 @@ class NeuralNetwork(L.LightningModule):
         loss = self.CTCLoss(y_hat, y)
 
         argmax_y_hat = self.argmax_prob(y_hat)
-        digits = loader.decode_digit(y)
-        digits_hat = loader.decode_digit(argmax_y_hat)
+        decoded_y, digits = loader.decode_digit(y)
+        decoded_y_hat, digits_hat = loader.decode_digit(argmax_y_hat)
 
+        # log the accuracy
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
         self.log_dict({'val_loss': loss.item(), 'val_acc': acc.item()})
 
