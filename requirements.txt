@@ -3,6 +3,8 @@ tqdm
 librosa~=0.10.2.post1
 lightning
 jupyter
+neptune
+tensorflow
 --index-url https://download.pytorch.org/whl/cu121
 torch
 torchvision
