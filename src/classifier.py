@@ -10,7 +10,7 @@ class NeuralNetwork(L.LightningModule):
         # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
         self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=loader.CLASSES, batch_first=True)
-        self.cnv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(3, 3), padding=1)
+        self.cnv = nn.Conv2d(in_channels=1, out_channels=200, kernel_size=(3, 3), padding=1)
         self.relu = nn.ReLU()
         self.loss = nn.CTCLoss()
         self.lr = 0.001
@@ -23,8 +23,8 @@ class NeuralNetwork(L.LightningModule):
         x = self.cnv(x)
         # squeeze the output
         x = x.squeeze(1)
-        nn.functional.log_softmax(x, dim=2)
-        x = x.permute(1, 0, 2)
+        nn.functional.log_softmax(x, dim=3)
+        x = x.permute(1,2, 0, 3)
         return x
 
 
@@ -65,8 +65,10 @@ class NeuralNetwork(L.LightningModule):
         x, y = batch
         y_hat = self(x)
         # calculate the loss
-        loss = self.CTCLoss(y_hat, y)
-
+        #now y_hat is of shape (number_of_kernels,T, N, C), so we need to run over the number of kernels and sum the loss
+        loss=0
+        for i in range(y_hat.shape[0]):
+            loss = loss + self.CTCLoss(y_hat[i], y)
         # log the loss
         self.log_dict({'train_loss': loss.item()})
         return loss
@@ -74,13 +76,17 @@ class NeuralNetwork(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = self.CTCLoss(y_hat, y)
+        loss = 0
+        for i in range(y_hat.shape[0]):
+            loss = loss + self.CTCLoss(y_hat[i], y)
+        #loss = self.CTCLoss(y_hat, y)
+        acc=0
+        for i in range(y_hat.shape[0]):
+            argmax_y_hat = self.argmax_prob(y_hat[i])
+            digits = loader.decode_digit(y)
+            digits_hat = loader.decode_digit(argmax_y_hat)
 
-        argmax_y_hat = self.argmax_prob(y_hat)
-        digits = loader.decode_digit(y)
-        digits_hat = loader.decode_digit(argmax_y_hat)
-
-        acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
+            acc =acc+ torch.sum(torch.eq(digits, digits_hat)) / len(digits)
         self.log_dict({'val_loss': loss.item(), 'val_acc': acc.item()})
 
         return loss
@@ -88,13 +94,17 @@ class NeuralNetwork(L.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = self.CTCLoss(y_hat, y)
+        loss = 0
+        for i in range(y_hat.shape[0]):
+            loss = loss + self.CTCLoss(y_hat[i], y)
+        # loss = self.CTCLoss(y_hat, y)
+        acc = 0
+        for i in range(y_hat.shape[0]):
+            argmax_y_hat = self.argmax_prob(y_hat[i])
+            digits = loader.decode_digit(y)
+            digits_hat = loader.decode_digit(argmax_y_hat)
 
-        argmax_y_hat = self.argmax_prob(y_hat)
-        digits = loader.decode_digit(y)
-        digits_hat = loader.decode_digit(argmax_y_hat)
-
-        acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
+            acc = acc + torch.sum(torch.eq(digits, digits_hat)) / len(digits)
         self.log_dict({'test_loss': loss.item(), 'test_acc': acc.item()})
         return loss
 
