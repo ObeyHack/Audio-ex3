@@ -9,22 +9,46 @@ class NeuralNetwork(L.LightningModule):
         super(NeuralNetwork, self).__init__()
         # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
-        self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=loader.CLASSES, batch_first=True)
-        self.cnv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(3, 3), padding=1)
+        self.layers_count = 100
+        self.kernel_filter = 1000
+        self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=loader.CLASSES, num_layers=self.layers_count,
+                                  batch_first=True)
+        self.cnv = nn.Conv2d(in_channels=1, out_channels=self.kernel_filter, kernel_size=(3, 3), padding=1)
+
+        # same as weighted sum of the input
+        self.conv1 = nn.Conv2d(in_channels=self.kernel_filter, out_channels=1, kernel_size=(1, 1), padding=0, stride=1)
         self.relu = nn.ReLU()
         self.loss = nn.CTCLoss()
         self.lr = 0.001
 
     def forward(self, x):
+        """
+        :param x: (N, T, MFCC_FEATURES) where N is the batch size, T is the number of time steps and MFCC_FEATURES is the
+        :return:
+        """
         x = x.permute(0, 2, 1)
-        x = self.lstm(x)
-        x = x[0]
+
+        # (N, MFCC_FEATURES, T)
+        res = self.lstm(x)
+        x = res[0]
+
+        # (N, T, C)
         x = x[:, None, :, :]
+
+        # (N, 1, T, C)
         x = self.cnv(x)
-        # squeeze the output
+
+        # (N, self.kernel_filter, T, C)
+        x = self.conv1(x)
+
+        # (N, 1, T, C)
         x = x.squeeze(1)
-        nn.functional.log_softmax(x, dim=2)
+
+        # (N, T, C)
+        x = nn.functional.log_softmax(x, dim=2)
         x = x.permute(1, 0, 2)
+
+        # (T, N, C)
         return x
 
 
