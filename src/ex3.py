@@ -30,6 +30,8 @@ def ctc(output_path, label_str, alphabet_str):
     :return: P(p|y) - The probability of the labeling given the network outputs.
     """
     y = np.load(output_path)
+    # Add column of zeros to y to represent the blank token at the start
+    y = np.hstack((np.zeros((y.shape[0], 1)), y))
     T, K = y.shape
     p = list(label_str)
     eps = ''
