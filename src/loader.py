@@ -123,9 +123,6 @@ def extract_mfcc(file_path):
     y, sr = librosa.load(file_path, sr=None)
     y_mfcc = librosa.feature.mfcc(y=y, sr=sr)
 
-    # pad the signal to have the same length if it is shorter than T
-    if y_mfcc.shape[1] < TIME_STEPS:
-        y_mfcc = np.pad(y_mfcc, ((0, 0), (0, TIME_STEPS - y_mfcc.shape[1])), 'constant')
     return y_mfcc
 
 
@@ -155,11 +152,12 @@ def get_set(set, root_path="data"):
     X = []
     for i in range(len(zero_to_eight)):
         for file in paths[i]:
-            X.append(extract_mfcc(file))
-    X = np.array(X)
+            X.append(torch.tensor(extract_mfcc(file)).T)
 
+    X_pad = nn.utils.rnn.pad_sequence(X, batch_first=True, padding_value=PADDING_VALUE)
     Y_pad = nn.utils.rnn.pad_sequence(Y, batch_first=True, padding_value=PADDING_VALUE)
-    return torch.tensor(X), Y_pad
+    X_pad = X_pad.permute(0, 2, 1)
+    return X_pad, Y_pad
 
 
 def load_data():
@@ -204,8 +202,6 @@ class AudioDataModule(L.LightningDataModule):
             test_dataset = torch.utils.data.TensorDataset(test_X, test_Y)
             test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
             self.test_loader = test_loader
-
-        print(stage)
 
     def train_dataloader(self):
         return self.train_loader
