@@ -185,8 +185,14 @@ class AudioDataModule(L.LightningDataModule):
     def __init__(self, data_dir: str = "data"):
         super().__init__()
         self.data_dir = data_dir
+        self._already_called = {}
+        for stage in ("fit", "validate", "test", "predict"):
+            self._already_called[stage] = False
 
     def setup(self, stage: str) -> None:
+        if self._already_called[stage]:
+            return
+
         if stage == "fit":
             train_X, train_Y = get_set('train', self.data_dir)
             train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)

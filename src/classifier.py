@@ -11,8 +11,8 @@ class NeuralNetwork(L.LightningModule):
         # Output size: TxC where T is the number of time steps and C is the number of classes
         self.layers_count = 100
         self.kernel_filter = 1000
-        self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=loader.CLASSES, num_layers=self.layers_count,
-                                  batch_first=True)
+        self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=loader.CLASSES,
+                                  num_layers=self.layers_count, batch_first=True)
         self.cnv = nn.Conv2d(in_channels=1, out_channels=self.kernel_filter, kernel_size=(3, 3), padding=1)
 
         # same as weighted sum of the input
