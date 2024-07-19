@@ -21,7 +21,7 @@ S_max = max([len(i) for i in zero_to_eight.values()])  # Maximum target length, 
                                                             # longest word is 'three' with 5 letters
 PADDING_VALUE = 0                                      # Padding value for the input sequence
 MFCC_FEATURES = 20                                     # Number of MFCC features
-BLANK_LABEL = 27                                       # Blank label for CTC loss
+BLANK_LABEL = 0                                        # Blank label for CTC loss
 
 
 ########################################################################################################################
@@ -64,7 +64,7 @@ def _decode_digit_not_batched(encoded_digit: torch.Tensor):
     for i in range(len(encoded_digit)):
         decoded_digit_i = int(encoded_digit[i].item())
 
-        if decoded_digit_i == BLANK_LABEL or decoded_digit_i == PADDING_VALUE:
+        if decoded_digit_i == BLANK_LABEL:
             continue
 
         # turn class to character

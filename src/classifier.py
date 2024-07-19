@@ -19,7 +19,7 @@ class NeuralNetwork(L.LightningModule):
         self.conv1 = nn.Conv2d(in_channels=self.kernel_filter, out_channels=1, kernel_size=(1, 1), padding=0, stride=1)
         self.relu = nn.ReLU()
         self.loss = nn.CTCLoss()
-        self.lr = 0.001
+        self.lr = 0.1
 
     def forward(self, x):
         """
@@ -31,6 +31,7 @@ class NeuralNetwork(L.LightningModule):
         # (N, MFCC_FEATURES, T)
         res = self.lstm(x)
         x = res[0]
+        x = self.relu(x)
 
         # (N, T, C)
         x = x[:, None, :, :]
@@ -104,8 +105,8 @@ class NeuralNetwork(L.LightningModule):
         decoded_y, digits = loader.decode_digit(y)
         decoded_y_hat, digits_hat = loader.decode_digit(argmax_y_hat)
 
-        self.logger.experiment["y"].extend(decoded_y)
-        self.logger.experiment["y_hat"].extend(decoded_y_hat)
+        self.logger.experiment["training/val_y"].extend(decoded_y)
+        self.logger.experiment["training/val_y_hat"].extend(decoded_y_hat)
 
         # log the accuracy
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
@@ -129,7 +130,7 @@ class NeuralNetwork(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        return torch.optim.Adam(self.parameters(), lr=1e-4)
 
 
 def main():
