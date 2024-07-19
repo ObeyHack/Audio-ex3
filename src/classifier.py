@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import loader
 import lightning as L
-
+from neptune.types import File
 
 class NeuralNetwork(L.LightningModule):
     def __init__(self):
@@ -104,8 +104,13 @@ class NeuralNetwork(L.LightningModule):
         decoded_y, digits = loader.decode_digit(y)
         decoded_y_hat, digits_hat = loader.decode_digit(argmax_y_hat)
 
+        self.logger.experiment["y"].extend(decoded_y)
+        self.logger.experiment["y_hat"].extend(decoded_y_hat)
+
         # log the accuracy
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
+
+
         self.log_dict({'val_loss': loss.item(), 'val_acc': acc.item()})
 
         return loss

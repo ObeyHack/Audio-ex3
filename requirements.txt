@@ -4,6 +4,7 @@ librosa~=0.10.2.post1
 lightning
 jupyter
 neptune
+wandb
 --index-url https://download.pytorch.org/whl/cu121
 torch
 torchvision

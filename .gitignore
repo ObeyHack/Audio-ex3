@@ -5,3 +5,5 @@
 .DS_Store
 *.pyc
 /src/lightning_logs/
+/src/.neptune/
+/src/wandb/
