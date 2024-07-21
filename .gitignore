@@ -7,3 +7,4 @@
 /src/lightning_logs/
 /src/.neptune/
 /src/wandb/
+.env
