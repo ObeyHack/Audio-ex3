@@ -54,6 +54,23 @@ def string_to_int(digit_str: str):
         return -1
     return list(zero_to_eight.values()).index(digit_str)
 
+
+def classify_digit(encoded_digit: torch.Tensor, loss_fn):
+    """
+    Classify the digit from the encoded digit based on the loss function
+    :param encoded_digit: shape (X,) where X is the length of the word (X<=T)
+    :param loss_fn: The loss function to use
+    :return: int
+    """
+    vals = list(zero_to_eight.values())
+    loss = {val: np.inf for val in vals}
+    for val in vals:
+        loss[val] = loss_fn(encoded_digit, val)
+
+    return min(loss, key=loss.get)
+
+
+
 def _decode_digit_not_batched(encoded_digit: torch.Tensor):
     """
     Decode the digit from the encoded digit
@@ -73,7 +90,7 @@ def _decode_digit_not_batched(encoded_digit: torch.Tensor):
     return decoded_digit
 
 
-def decode_digit(encoded_digit: torch.Tensor):
+def decode_digit(encoded_digit: torch.Tensor, loss_fn):
     """
     Wrapper function for _decode_digit_not_batched,
     :param encoded_digit: shape (N, X) or (X,) where X is the length of the word (X<=T)
@@ -81,11 +98,11 @@ def decode_digit(encoded_digit: torch.Tensor):
     """
     if len(encoded_digit.shape) == 1:
         decoded = _decode_digit_not_batched(encoded_digit)
-        digit = torch.tensor(string_to_int(decoded))
+        digit = torch.tensor(classify_digit(encoded_digit, loss_fn))
         return decoded, digit
     else:
         decoded_batch = [_decode_digit_not_batched(encoded_digit[i, :]) for i in range(encoded_digit.shape[0])]
-        digits = torch.tensor([string_to_int(decoded) for decoded in decoded_batch])
+        digits = torch.tensor([classify_digit(encoded_digit[i, :], loss_fn) for i in range(encoded_digit.shape[0])])
         return decoded_batch, digits
 
 
