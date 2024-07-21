@@ -5,6 +5,7 @@ lightning
 jupyter
 neptune
 wandb
+python-dotenv
 --index-url https://download.pytorch.org/whl/cu121
 torch
 torchvision
