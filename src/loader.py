@@ -46,8 +46,8 @@ def encode_digit(digit: int):
 def string_to_int(digit_str: str):
     """
     Convert the digit string to a number
-    :param digit_str: The digit string
-    :return: The digit number
+    :param digit_str: (N, ) or (, )
+    :return: int or (N, )
     """
     vals = list(zero_to_eight.values())
     if digit_str not in vals:
@@ -55,70 +55,40 @@ def string_to_int(digit_str: str):
     return list(zero_to_eight.values()).index(digit_str)
 
 
-def classify_digit(encoded_digit: torch.Tensor, loss_fn):
-    """
-    Classify the digit from the encoded digit based on the loss function
-    :param encoded_digit: shape (X,) where X is the length of the word (X<=T)
-    :param loss_fn: The loss function to use
-    :return: int
-    """
-    vals = list(zero_to_eight.values())
-    loss = {val: np.inf for val in vals}
-    for val in vals:
-        loss[val] = loss_fn(encoded_digit, val)
-
-    return min(loss, key=loss.get)
-
-
-
-def _decode_digit_not_batched(encoded_digit: torch.Tensor):
-    """
-    Decode the digit from the encoded digit
-    :param encoded_digit: (T, )
-    :return: The decoded digit as number
-    """
-    decoded_digit = ''
-    for i in range(len(encoded_digit)):
-        decoded_digit_i = int(encoded_digit[i].item())
-
-        if decoded_digit_i == BLANK_LABEL:
-            continue
-
-        # turn class to character
-        decoded_digit += chr(decoded_digit_i + 96)
-
-    return decoded_digit
-
-
-def decode_digit(encoded_digit: torch.Tensor, loss_fn):
+def decode_digit(encoded_digit: torch.Tensor):
     """
     Wrapper function for _decode_digit_not_batched,
     :param encoded_digit: shape (N, X) or (X,) where X is the length of the word (X<=T)
     :return: (str, (,)) or (N_str, (N,))
     """
+    def decode_digit_not_batched(encoded_digit: torch.Tensor):
+        """
+        Decode the digit from the encoded digit
+        :param encoded_digit: (T, )
+        :return: The decoded digit as number
+        """
+        decoded_digit = ''
+        for i in range(len(encoded_digit)):
+            decoded_digit_i = int(encoded_digit[i].item())
+
+            if decoded_digit_i == BLANK_LABEL:
+                continue
+
+            # turn class to character
+            decoded_digit += chr(decoded_digit_i + 96)
+
+        return decoded_digit
+
+
     if len(encoded_digit.shape) == 1:
-        decoded = _decode_digit_not_batched(encoded_digit)
-        digit = torch.tensor(classify_digit(encoded_digit, loss_fn))
+        decoded = decode_digit_not_batched(encoded_digit)
+        digit = torch.tensor(string_to_int(decoded))
         return decoded, digit
     else:
-        decoded_batch = [_decode_digit_not_batched(encoded_digit[i, :]) for i in range(encoded_digit.shape[0])]
-        digits = torch.tensor([classify_digit(encoded_digit[i, :], loss_fn) for i in range(encoded_digit.shape[0])])
+        decoded_batch = [decode_digit_not_batched(encoded_digit[i, :]) for i in range(encoded_digit.shape[0])]
+        digits = torch.tensor([string_to_int(decoded) for decoded in decoded_batch])
         return decoded_batch, digits
 
-
-def _un_pad_not_batched(y):
-    """
-    Remove the padding from the label
-    :param y: Shape (S,)
-    :return: Shape (X,) where X <= S
-    """
-    un_pad_i = -1
-    for i in range(len(y), 0, -1):
-        if y[i - 1] != PADDING_VALUE:
-            un_pad_i = i
-            break
-
-    return y[:un_pad_i]
 
 def un_pad(y):
     """
@@ -126,10 +96,24 @@ def un_pad(y):
     :param y: Shape (N, S) or (S,)
     :return: Shape (N, X) or (X,) where X <= S
     """
+    def un_pad_not_batched(y):
+        """
+        Remove the padding from the label
+        :param y: Shape (S,)
+        :return: Shape (X,) where X <= S
+        """
+        un_pad_i = -1
+        for i in range(len(y), 0, -1):
+            if y[i - 1] != PADDING_VALUE:
+                un_pad_i = i
+                break
+
+        return y[:un_pad_i]
+
     if len(y.shape) == 1:
-        return _un_pad_not_batched(y).tolist()
+        return un_pad_not_batched(y).tolist()
     else:
-        return [_un_pad_not_batched(y[i]) for i in range(y.shape[0])]
+        return [un_pad_not_batched(y[i]) for i in range(y.shape[0])]
 
 ########################################################################################################################
 ################################################# Data Loader ##########################################################

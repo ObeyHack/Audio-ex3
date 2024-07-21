@@ -1,8 +1,11 @@
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import loader
 import lightning as L
 from neptune.types import File
+from io import StringIO
 
 class NeuralNetwork(L.LightningModule):
     def __init__(self):
@@ -70,20 +73,35 @@ class NeuralNetwork(L.LightningModule):
 
         # The input length is number of time steps
         input_lengths = torch.full(size=(batch_size,), fill_value=loader.TIME_STEPS, dtype=torch.long)
-
         return self.loss(y_hat, y, input_lengths, label_length)
 
-
-    def argmax_prob(self, y_hat):
+    def predict(self, y_hat):
         """
-        pick the most probable class for each time step and decode the digit from the classes
+        pick the most probable class for the prediction
         :param y_hat: shape (T, C) or (T, N, C)
-        :return: (,) or (N,) tensor with the decoded digits
+        :return: int or (N, ) where N is the batch size
         """
+
+        def un_batched_predict(y_hat):
+            """
+            pick the most probable class for the prediction
+            :param y_hat: shape (T, C)
+            :return: string
+            """
+            vals = loader.zero_to_eight.values()
+            loss = {vals: 0 for vals in vals}
+            for i, val in enumerate(vals):
+                encoded_digit = loader.encode_digit(i)
+                loss[val] = self.loss(y_hat,encoded_digit, y_hat.shape[:1], encoded_digit.shape[:1])
+
+            # return the class with the lowest loss
+            return min(loss, key=loss.get)
+
         if len(y_hat.shape) == 2:
-            return torch.argmax(y_hat, dim=1)
+            return un_batched_predict(y_hat)
+
         else:
-            return torch.stack([torch.argmax(y_hat[:, i, :], dim=1) for i in range(y_hat.shape[1])])
+            return [un_batched_predict(y_hat[:, i, :]) for i in range(y_hat.shape[1])]
 
 
     def training_step(self, batch, batch_idx):
@@ -101,17 +119,19 @@ class NeuralNetwork(L.LightningModule):
         y_hat = self(x)
         loss = self.CTCLoss(y_hat, y)
 
-        argmax_y_hat = self.argmax_prob(y_hat)
         decoded_y, digits = loader.decode_digit(y)
-        decoded_y_hat, digits_hat = loader.decode_digit(argmax_y_hat)
+        digits_hat_str = self.predict(y_hat)
+        digits_hat = torch.tensor([loader.string_to_int(digit) for digit in digits_hat_str])
 
-        self.logger.experiment["training/val_y"].extend(decoded_y)
-        self.logger.experiment["training/val_y_hat"].extend(decoded_y_hat)
+        # log the decoded values
+        df = pd.DataFrame({'y': decoded_y, 'y_hat': digits_hat_str})
 
         # log the accuracy
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        self.logger.experiment[f"training/val_predictions_{self.current_epoch}"].upload(File.from_stream(csv_buffer, extension="csv"))
+
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
-
-
         self.log_dict({'val_loss': loss.item(), 'val_acc': acc.item()})
 
         return loss
@@ -121,9 +141,18 @@ class NeuralNetwork(L.LightningModule):
         y_hat = self(x)
         loss = self.CTCLoss(y_hat, y)
 
-        argmax_y_hat = self.argmax_prob(y_hat)
-        digits = loader.decode_digit(y)
-        digits_hat = loader.decode_digit(argmax_y_hat)
+        decoded_y, digits = loader.decode_digit(y)
+        digits_hat_str = self.predict(y_hat)
+        digits_hat = torch.tensor([loader.string_to_int(digit) for digit in digits_hat_str])
+
+        # log the decoded values
+        df = pd.DataFrame({'y': decoded_y, 'y_hat': digits_hat_str})
+
+        # log the accuracy
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        self.logger.experiment[f"training/test_predictions_{self.current_epoch}"].upload(
+            File.from_stream(csv_buffer, extension="csv"))
 
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
         self.log_dict({'test_loss': loss.item(), 'test_acc': acc.item()})
