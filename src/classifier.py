@@ -186,6 +186,7 @@ def train_func(config=None, dm=None, model=None, logger=None, logger_config=None
 
     # log the hyperparameters and not the api key and project name
     logger.run["parameters"] = config
+
     metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
     trainer = L.Trainer(
         devices="auto",
