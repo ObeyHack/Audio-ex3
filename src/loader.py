@@ -12,15 +12,15 @@ import lightning as L
 ########################################################################################################################
 
 zero_to_eight = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight'}
-BATCH_SIZE = 16                                        # Batch size
-TIME_STEPS = 8                                        # Input sequence length
+BATCH_SIZE = 32                                        # Batch size
+TIME_STEPS = 8                                         # Input sequence length
 CLASSES = 26+1                                         # Number of classes (including blank)
 S_min = min([len(i) for i in zero_to_eight.values()])  # Minimum target length, for demonstration purposes,
                                                             # shortest word is 'one' with 3 letters
 S_max = max([len(i) for i in zero_to_eight.values()])  # Maximum target length, for demonstration purposes,
                                                             # longest word is 'three' with 5 letters
 PADDING_VALUE = 0                                      # Padding value for the input sequence
-MFCC_FEATURES = 20                                     # Number of MFCC features
+MFCC_FEATURES = 13                                     # Number of MFCC features
 BLANK_LABEL = 0                                        # Blank label for CTC loss
 
 
@@ -122,8 +122,7 @@ def un_pad(y):
 
 def extract_mfcc(file_path):
     y, sr = librosa.load(file_path, sr=None)
-    y_mfcc = librosa.feature.mfcc(y=y, sr=sr)
-
+    y_mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=MFCC_FEATURES)
     return y_mfcc
 
 
@@ -161,7 +160,7 @@ def get_set(set, root_path="data"):
     return X_pad, Y_pad
 
 
-def load_data():
+def load_data(batch_size=BATCH_SIZE):
     train_X, train_Y = get_set('train')
     validation_X, validation_Y = get_set('val')
     test_X, test_Y = get_set('test')
@@ -172,20 +171,21 @@ def load_data():
     test_dataset = torch.utils.data.TensorDataset(test_X, test_Y)
 
     # Define the dataloaders
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=11,
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=11,
                                                persistent_workers=True)
-    validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=BATCH_SIZE, shuffle=False,
+    validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=batch_size, shuffle=False,
                                                     num_workers=11, persistent_workers=True)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=11,
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=11,
                                               persistent_workers=True)
 
     return {'train': train_loader, 'val': validation_loader, 'test': test_loader}
 
 
 class AudioDataModule(L.LightningDataModule):
-    def __init__(self, data_dir: str = "data"):
+    def __init__(self, data_dir: str = "data", batch_size: int = BATCH_SIZE):
         super().__init__()
         self.data_dir = data_dir
+        self.batch_size = batch_size
         self._already_called = {}
         for stage in ("fit", "validate", "test", "predict"):
             self._already_called[stage] = False
@@ -197,18 +197,24 @@ class AudioDataModule(L.LightningDataModule):
         if stage == "fit":
             train_X, train_Y = get_set('train', self.data_dir)
             train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
-            train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+            train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True,
+                                                       num_workers=11, persistent_workers=True)
             self.train_loader = train_loader
             validation_X, validation_Y = get_set('val', self.data_dir)
             validation_dataset = torch.utils.data.TensorDataset(validation_X, validation_Y)
-            validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=BATCH_SIZE, shuffle=False)
+            validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=self.batch_size, shuffle=False,
+                                                            num_workers=11, persistent_workers=True)
             self.val_loader = validation_loader
+            self._already_called["fit"] = True
+            self._already_called["validate"] = True
 
         if stage == "test":
             test_X, test_Y = get_set('test', self.data_dir)
             test_dataset = torch.utils.data.TensorDataset(test_X, test_Y)
-            test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+            test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False,
+                                                      num_workers=11, persistent_workers=True)
             self.test_loader = test_loader
+            self._already_called["test"] = True
 
     def train_dataloader(self):
         return self.train_loader

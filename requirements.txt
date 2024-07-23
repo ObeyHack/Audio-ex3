@@ -6,6 +6,7 @@ jupyter
 neptune
 wandb
 python-dotenv
+ray[tune]
 --index-url https://download.pytorch.org/whl/cu121
 torch
 torchvision

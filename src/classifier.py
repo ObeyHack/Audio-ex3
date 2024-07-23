@@ -2,18 +2,35 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+from lightning.pytorch.loggers import NeptuneLogger
 import loader
 import lightning as L
 from neptune.types import File
 from io import StringIO
+from ray.tune.integration.pytorch_lightning import TuneReportCallback
 
-class NeuralNetwork(L.LightningModule):
-    def __init__(self):
-        super(NeuralNetwork, self).__init__()
+
+default_config = {
+    "lr": 1e-3,
+    "layers_count": 100,
+    "kernel_filter": 1000,
+    "batch_size": 32,
+}
+
+
+class DigitClassifier(L.LightningModule):
+    def __init__(self, config: dict):
+        super(DigitClassifier, self).__init__()
+
+        self.layers_count = config['layers_count']
+        self.kernel_filter = config['kernel_filter']
+        self.lr = config['lr']
+
+        self.eval_loss = []
+        self.eval_accuracy = []
+
         # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
-        self.layers_count = 100
-        self.kernel_filter = 1000
         self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=loader.CLASSES,
                                   num_layers=self.layers_count, batch_first=True)
         self.cnv = nn.Conv2d(in_channels=1, out_channels=self.kernel_filter, kernel_size=(3, 3), padding=1)
@@ -22,41 +39,8 @@ class NeuralNetwork(L.LightningModule):
         self.conv1 = nn.Conv2d(in_channels=self.kernel_filter, out_channels=1, kernel_size=(1, 1), padding=0, stride=1)
         self.relu = nn.ReLU()
         self.loss = nn.CTCLoss()
-        self.lr = 0.1
 
-    def forward(self, x):
-        """
-        :param x: (N, T, MFCC_FEATURES) where N is the batch size, T is the number of time steps and MFCC_FEATURES is the
-        :return:
-        """
-        x = x.permute(0, 2, 1)
-
-        # (N, MFCC_FEATURES, T)
-        res = self.lstm(x)
-        x = res[0]
-        x = self.relu(x)
-
-        # (N, T, C)
-        x = x[:, None, :, :]
-
-        # (N, 1, T, C)
-        x = self.cnv(x)
-
-        # (N, self.kernel_filter, T, C)
-        x = self.conv1(x)
-
-        # (N, 1, T, C)
-        x = x.squeeze(1)
-
-        # (N, T, C)
-        x = nn.functional.log_softmax(x, dim=2)
-        x = x.permute(1, 0, 2)
-
-        # (T, N, C)
-        return x
-
-
-    def CTCLoss(self, y_hat, y):
+    def ctc_loss(self, y_hat, y):
         """
         :param y_hat: The predicted values, shape (T, N, C) where T is TimeSteps, N is the batch size and
                         C is the number of classes.
@@ -103,12 +87,58 @@ class NeuralNetwork(L.LightningModule):
         else:
             return [un_batched_predict(y_hat[:, i, :]) for i in range(y_hat.shape[1])]
 
+    def accuracy(self, y_hat, y):
+        """
+        :param y_hat: The predicted values, shape (T, N, C) where T is TimeSteps, N is the batch size and
+                        C is the number of classes.
+                        In total, they are N matrices of TxC shape, one for each time step a probability distribution
+                        over the classes
+        :param y: The true values, shape (N, S) where N is the batch size and S is the length of the word.
+        :return: The accuracy.
+        """
+        decoded_y, digits = loader.decode_digit(y)
+        digits_hat_str = self.predict(y_hat)
+        digits_hat = torch.tensor([loader.string_to_int(digit) for digit in digits_hat_str])
+
+        acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
+        return acc
+
+    def forward(self, x):
+        """
+        :param x: (N, T, MFCC_FEATURES) where N is the batch size, T is the number of time steps and MFCC_FEATURES is the
+        :return:
+        """
+        x = x.permute(0, 2, 1)
+
+        # (N, MFCC_FEATURES, T)
+        res = self.lstm(x)
+        x = res[0]
+        x = self.relu(x)
+
+        # (N, T, C)
+        x = x[:, None, :, :]
+
+        # (N, 1, T, C)
+        x = self.cnv(x)
+
+        # (N, self.kernel_filter, T, C)
+        x = self.conv1(x)
+
+        # (N, 1, T, C)
+        x = x.squeeze(1)
+
+        # (N, T, C)
+        x = nn.functional.log_softmax(x, dim=2)
+        x = x.permute(1, 0, 2)
+
+        # (T, N, C)
+        return x
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         # calculate the loss
-        loss = self.CTCLoss(y_hat, y)
+        loss = self.ctc_loss(y_hat, y)
 
         # log the loss
         self.log_dict({'train_loss': loss.item()})
@@ -117,58 +147,60 @@ class NeuralNetwork(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = self.CTCLoss(y_hat, y)
+        loss = self.ctc_loss(y_hat, y)
+        acc = self.accuracy(y_hat, y)
 
-        decoded_y, digits = loader.decode_digit(y)
-        digits_hat_str = self.predict(y_hat)
-        digits_hat = torch.tensor([loader.string_to_int(digit) for digit in digits_hat_str])
-
-        # log the decoded values
-        df = pd.DataFrame({'y': decoded_y, 'y_hat': digits_hat_str})
-
-        # log the accuracy
-        csv_buffer = StringIO()
-        df.to_csv(csv_buffer, index=False)
-        self.logger.experiment[f"training/val_predictions_{self.current_epoch}"].upload(File.from_stream(csv_buffer, extension="csv"))
-
-        acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
-        self.log_dict({'val_loss': loss.item(), 'val_acc': acc.item()})
-
-        return loss
+        self.eval_loss.append(loss)
+        self.eval_accuracy.append(acc)
+        return {"val_loss": loss, "val_accuracy": acc}
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = self.CTCLoss(y_hat, y)
+        loss = self.ctc_loss(y_hat, y)
+        acc = self.accuracy(y_hat, y)
+        return {"val_loss": loss, "val_accuracy": acc}
 
-        decoded_y, digits = loader.decode_digit(y)
-        digits_hat_str = self.predict(y_hat)
-        digits_hat = torch.tensor([loader.string_to_int(digit) for digit in digits_hat_str])
-
-        # log the decoded values
-        df = pd.DataFrame({'y': decoded_y, 'y_hat': digits_hat_str})
-
-        # log the accuracy
-        csv_buffer = StringIO()
-        df.to_csv(csv_buffer, index=False)
-        self.logger.experiment[f"training/test_predictions_{self.current_epoch}"].upload(
-            File.from_stream(csv_buffer, extension="csv"))
-
-        acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
-        self.log_dict({'test_loss': loss.item(), 'test_acc': acc.item()})
-        return loss
+    def on_validation_epoch_end(self):
+        avg_loss = torch.stack(self.eval_loss).mean()
+        avg_acc = torch.stack(self.eval_accuracy).mean()
+        self.log("val_loss", avg_loss, sync_dist=True)
+        self.log("val_accuracy", avg_acc, sync_dist=True)
+        self.eval_loss.clear()
+        self.eval_accuracy.clear()
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=1e-4)
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
+
+
+def train_func(config=None, dm=None, model=None, logger=None, logger_config=None):
+    if config is None:
+        config = default_config
+    if dm is None:
+        dm = loader.AudioDataModule(batch_size=config['batch_size'])
+    if model is None:
+        model = DigitClassifier(config)
+    if logger is None:
+        logger = NeptuneLogger(project=logger_config["project_name"], api_key=logger_config["api_key"],
+                               log_model_checkpoints=False)
+
+    # log the hyperparameters and not the api key and project name
+    logger.run["parameters"] = config
+    metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
+    trainer = L.Trainer(
+        devices="auto",
+        accelerator="auto",
+        logger=logger,
+        max_epochs=5
+    )
+    trainer.fit(model, datamodule=dm)
+
+    logger.run.stop()
+    return trainer
 
 
 def main():
-    data_loader = loader.load_data()
-    model = NeuralNetwork()
-    trainer = L.Trainer(accelerator="auto", devices="auto", strategy="auto")
-    #trainer.fit(model, data_loader['train'])
-    trainer.fit(model, data_loader['train'], data_loader['val'])
-    trainer.test(model, data_loader['test'])
+    train_func()
 
 
 if __name__ == '__main__':
