@@ -21,10 +21,10 @@ default_config = {
 class DigitClassifier(L.LightningModule):
     def __init__(self, config: dict):
         super(DigitClassifier, self).__init__()
-
         self.layers_count = config['layers_count']
         self.kernel_filter = config['kernel_filter']
         self.lr = config['lr']
+        self.save_hyperparameters(config)
 
         self.eval_loss = []
         self.eval_accuracy = []
@@ -173,7 +173,7 @@ class DigitClassifier(L.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
 
 
-def train_func(config=None, dm=None, model=None, logger=None, logger_config=None):
+def train_func(config=None, dm=None, model=None, logger=None, logger_config=None, num_epochs=10):
     if config is None:
         config = default_config
     if dm is None:
@@ -187,13 +187,13 @@ def train_func(config=None, dm=None, model=None, logger=None, logger_config=None
     # log the hyperparameters and not the api key and project name
     logger.run["parameters"] = config
 
-
-    metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
+    metrics = {"loss": "val_loss", "acc": "val_accuracy"}
     trainer = L.Trainer(
         devices="auto",
         accelerator="auto",
         logger=logger,
-        max_epochs=5
+        max_epochs=num_epochs,
+        callbacks=[TuneReportCallback(metrics, on="validation_end")],
     )
     trainer.fit(model, datamodule=dm)
 
