@@ -25,7 +25,7 @@ def tune_classifier(num_samples=10, num_epochs=10, gpus_per_trial=1, logger_conf
         dm=dm,
     )
 
-    scheduler = ASHAScheduler(max_t=num_epochs, grace_period=1, reduction_factor=2)
+    # scheduler = ASHAScheduler(max_t=num_epochs, grace_period=1, reduction_factor=2)
 
     reporter = JupyterNotebookReporter(
         parameter_columns=["layers_count", "kernel_filter", "lr", "batch_size"],
@@ -37,7 +37,7 @@ def tune_classifier(num_samples=10, num_epochs=10, gpus_per_trial=1, logger_conf
         tune_config=tune.TuneConfig(
             metric="loss",
             mode="min",
-            scheduler=scheduler,
+            # scheduler=scheduler,
             num_samples=num_samples,
         ),
         run_config=train.RunConfig(
