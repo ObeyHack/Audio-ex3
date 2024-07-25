@@ -2,6 +2,7 @@ import os
 import librosa
 import numpy as np
 import torch
+from datasets import load_dataset
 from librosa.feature import mfcc
 from torch import nn
 from torch.utils import data
@@ -11,13 +12,13 @@ import lightning as L
 ################################################# Constants ############################################################
 ########################################################################################################################
 
-zero_to_eight = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight'}
+zero_to_nine = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine'}
 BATCH_SIZE = 32                                        # Batch size
 TIME_STEPS = 8                                         # Input sequence length
 CLASSES = 26+1                                         # Number of classes (including blank)
-S_min = min([len(i) for i in zero_to_eight.values()])  # Minimum target length, for demonstration purposes,
+S_min = min([len(i) for i in zero_to_nine.values()])  # Minimum target length, for demonstration purposes,
                                                             # shortest word is 'one' with 3 letters
-S_max = max([len(i) for i in zero_to_eight.values()])  # Maximum target length, for demonstration purposes,
+S_max = max([len(i) for i in zero_to_nine.values()])  # Maximum target length, for demonstration purposes,
                                                             # longest word is 'three' with 5 letters
 PADDING_VALUE = 0                                      # Padding value for the input sequence
 MFCC_FEATURES = 13                                     # Number of MFCC features
@@ -35,9 +36,9 @@ def encode_digit(digit: int):
     :param digit: The digit to encode
     :return: The tensor of size CLASSES
     """
-    encoded_digit = torch.zeros(len(zero_to_eight[digit]))
+    encoded_digit = torch.zeros(len(zero_to_nine[digit]))
     for i in range(len(encoded_digit)):
-        char_i = zero_to_eight[digit][i]
+        char_i = zero_to_nine[digit][i]
         # encode the character
         encoded_digit[i] = ord(char_i) - 96
     return encoded_digit
@@ -49,10 +50,10 @@ def string_to_int(digit_str: str):
     :param digit_str: (N, ) or (, )
     :return: int or (N, )
     """
-    vals = list(zero_to_eight.values())
+    vals = list(zero_to_nine.values())
     if digit_str not in vals:
         return -1
-    return list(zero_to_eight.values()).index(digit_str)
+    return list(zero_to_nine.values()).index(digit_str)
 
 
 def decode_digit(encoded_digit: torch.Tensor):
@@ -134,10 +135,10 @@ def get_paths(set, root_path):
     """
     # loop on every directory in the set directory (0-8) and get the path of every file in it
     paths = []
-    for i in zero_to_eight:
+    for i in zero_to_nine:
         path_i = []
-        for file in os.listdir(os.path.join(*[root_path, set, zero_to_eight[i]])):
-            path_i.append(os.path.join(*[root_path, set, zero_to_eight[i], file]))
+        for file in os.listdir(os.path.join(*[root_path, set, zero_to_nine[i]])):
+            path_i.append(os.path.join(*[root_path, set, zero_to_nine[i], file]))
         paths.append(path_i)
     return paths
 
@@ -145,12 +146,12 @@ def get_paths(set, root_path):
 def get_set(set, root_path="data"):
     paths = get_paths(set, root_path)
     Y = []
-    for i in range(len(zero_to_eight)):
+    for i in range(len(zero_to_nine)):
         for _ in paths[i]:
             Y.append(encode_digit(i))
 
     X = []
-    for i in range(len(zero_to_eight)):
+    for i in range(len(zero_to_nine)):
         for file in paths[i]:
             X.append(torch.tensor(extract_mfcc(file)).T)
 
@@ -187,33 +188,35 @@ class AudioDataModule(L.LightningDataModule):
         self.data_dir = data_dir
         self.batch_size = batch_size
         self._already_called = {}
+        self.dataset = None
         for stage in ("fit", "validate", "test", "predict"):
             self._already_called[stage] = False
+
+    def prepare_data(self):
+        self.dataset = load_dataset("MrObay/Audio-ex3", name="mfcc", cache_dir="dataset")
+        self.dataset.set_format(type="torch", columns=["audio", "label"])
 
     def setup(self, stage: str) -> None:
         if self._already_called[stage]:
             return
 
         if stage == "fit":
-            train_X, train_Y = get_set('train', self.data_dir)
-            train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
-            train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True,
+            train_set = self.dataset['train']
+            val_set = self.dataset['validation']
+            func = lambda e: {'audio': e['audio']['array'], 'label': e['label']}
+            train_set = train_set.map(func)
+            val_set = val_set.map(func)
+            self.train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.batch_size, shuffle=True,
                                                        num_workers=11, persistent_workers=True)
-            self.train_loader = train_loader
-            validation_X, validation_Y = get_set('val', self.data_dir)
-            validation_dataset = torch.utils.data.TensorDataset(validation_X, validation_Y)
-            validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=self.batch_size, shuffle=False,
-                                                            num_workers=11, persistent_workers=True)
-            self.val_loader = validation_loader
+
+            self.val_loader = torch.utils.data.DataLoader(val_set, batch_size=self.batch_size, shuffle=False,
+                                                       num_workers=11, persistent_workers=True)
             self._already_called["fit"] = True
             self._already_called["validate"] = True
 
         if stage == "test":
-            test_X, test_Y = get_set('test', self.data_dir)
-            test_dataset = torch.utils.data.TensorDataset(test_X, test_Y)
-            test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False,
-                                                      num_workers=11, persistent_workers=True)
-            self.test_loader = test_loader
+            self.test_loader = torch.utils.data.DataLoader(self.dataset['test'], batch_size=self.batch_size, shuffle=False,
+                                                       num_workers=11, persistent_workers=True)
             self._already_called["test"] = True
 
     def train_dataloader(self):

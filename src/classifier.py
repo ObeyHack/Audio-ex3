@@ -71,7 +71,7 @@ class DigitClassifier(L.LightningModule):
             :param y_hat: shape (T, C)
             :return: string
             """
-            vals = loader.zero_to_eight.values()
+            vals = loader.zero_to_nine.values()
             loss = {vals: 0 for vals in vals}
             for i, val in enumerate(vals):
                 encoded_digit = loader.encode_digit(i)
