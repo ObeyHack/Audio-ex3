@@ -114,7 +114,7 @@ class DigitClassifier(L.LightningModule):
         res = self.lstm(x)
         x = res[0]
         x = self.relu(x)
-
+        
         # (N, T, C)
         x = x[:, None, :, :]
 
