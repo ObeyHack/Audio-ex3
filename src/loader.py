@@ -2,7 +2,7 @@ import os
 import librosa
 import numpy as np
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from librosa.feature import mfcc
 from torch import nn
 from torch.utils import data
@@ -23,7 +23,7 @@ S_max = max([len(i) for i in zero_to_nine.values()])  # Maximum target length, f
 PADDING_VALUE = 0                                      # Padding value for the input sequence
 MFCC_FEATURES = 13                                     # Number of MFCC features
 BLANK_LABEL = 0                                        # Blank label for CTC loss
-
+AUDIO_LENGTH = 16000                                   # Audio length in samples
 
 ########################################################################################################################
 ################################################# Encode/Decode ########################################################
@@ -183,6 +183,20 @@ def load_data(batch_size=BATCH_SIZE):
 
 
 class AudioDataModule(L.LightningDataModule):
+
+    class MyDataset(Dataset):
+        def __init__(self, dataset):
+            self.dataset = dataset
+
+        def __getitem__(self, index):
+            x = self.dataset[index]['mfcc']
+            y = self.dataset[index]['label']
+            return x, y
+
+        def __len__(self):
+            return len(self.dataset)
+
+
     def __init__(self, data_dir: str = "data", batch_size: int = BATCH_SIZE):
         super().__init__()
         self.data_dir = data_dir
@@ -193,29 +207,30 @@ class AudioDataModule(L.LightningDataModule):
             self._already_called[stage] = False
 
     def prepare_data(self):
-        self.dataset = load_dataset("MrObay/Audio-ex3", name="mfcc", cache_dir="dataset")
-        self.dataset.set_format(type="torch", columns=["audio", "label"])
+        self.dataset = load_dataset("MrObay/Audio-ex3")
+        self.dataset = self.dataset.remove_columns(["audio", "label_str"])
+        self.dataset.set_format(type="torch", columns=["mfcc", "label"])
+        # self.collate_fn = lambda batch: [torch.stack([x['mfcc'] for x in batch]), torch.tensor([x['label'] for x in batch])]
+        #self.dataset = self.MyDataset(self.dataset)
 
     def setup(self, stage: str) -> None:
         if self._already_called[stage]:
             return
 
         if stage == "fit":
-            train_set = self.dataset['train']
-            val_set = self.dataset['validation']
-            func = lambda e: {'audio': e['audio']['array'], 'label': e['label']}
-            train_set = train_set.map(func)
-            val_set = val_set.map(func)
-            self.train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.batch_size, shuffle=True,
+            self.train_loader = torch.utils.data.DataLoader(self.dataset['train'],
+                                                            batch_size=self.batch_size, shuffle=True,
                                                        num_workers=11, persistent_workers=True)
 
-            self.val_loader = torch.utils.data.DataLoader(val_set, batch_size=self.batch_size, shuffle=False,
+            self.val_loader = torch.utils.data.DataLoader(self.dataset['validation'],
+                                                          batch_size=self.batch_size, shuffle=False,
                                                        num_workers=11, persistent_workers=True)
             self._already_called["fit"] = True
             self._already_called["validate"] = True
 
         if stage == "test":
-            self.test_loader = torch.utils.data.DataLoader(self.dataset['test'], batch_size=self.batch_size, shuffle=False,
+            self.test_loader = torch.utils.data.DataLoader(self.dataset['test'],
+                                                           batch_size=self.batch_size, shuffle=False,
                                                        num_workers=11, persistent_workers=True)
             self._already_called["test"] = True
 
