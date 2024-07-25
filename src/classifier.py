@@ -125,7 +125,7 @@ class DigitClassifier(L.LightningModule):
         return x
 
     def training_step(self, batch, batch_idx):
-        x, y = batch["mfcc"].permute(0, 2,1), batch["label"]
+        x, y = batch
         y_hat = self(x)
         # calculate the loss
         loss = self.ctc_loss(y_hat, y)
@@ -135,7 +135,7 @@ class DigitClassifier(L.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch["mfcc"].permute(0, 2,1), batch["label"]
+        x, y = batch
         y_hat = self(x)
         loss = self.ctc_loss(y_hat, y)
         acc = self.accuracy(y_hat, y)
@@ -145,7 +145,7 @@ class DigitClassifier(L.LightningModule):
         return {"val_loss": loss, "val_accuracy": acc}
 
     def test_step(self, batch, batch_idx):
-        x, y = batch["mfcc"].permute(0, 2,1), batch["label"]
+        x, y = batch
         y_hat = self(x)
         loss = self.ctc_loss(y_hat, y)
         acc = self.accuracy(y_hat, y)

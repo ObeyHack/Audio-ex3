@@ -191,7 +191,7 @@ class AudioDataModule(L.LightningDataModule):
         def __getitem__(self, index):
             x = self.dataset[index]['mfcc']
             y = self.dataset[index]['label']
-            return x, y
+            return [x, y]
 
         def __len__(self):
             return len(self.dataset)
@@ -208,23 +208,24 @@ class AudioDataModule(L.LightningDataModule):
 
     def prepare_data(self):
         self.dataset = load_dataset("MrObay/Audio-ex3")
-        self.dataset = self.dataset.remove_columns(["audio", "label_str"])
-        self.dataset.set_format(type="torch", columns=["mfcc", "label"])
-        # self.collate_fn = lambda batch: [torch.stack([x['mfcc'] for x in batch]), torch.tensor([x['label'] for x in batch])]
-        #self.dataset = self.MyDataset(self.dataset)
+        self.dataset = self.dataset.remove_columns(["audio", "label"])
+        self.dataset.set_format(type="torch", columns=["mfcc", "label_str"])
+        self.collate_fn = lambda batch: [torch.stack([x for x in batch]),
+                                         torch.stack([x for x in batch])]
+        self.dataset = self.MyDataset(self.dataset)
 
     def setup(self, stage: str) -> None:
         if self._already_called[stage]:
             return
 
         if stage == "fit":
-            self.train_loader = torch.utils.data.DataLoader(self.dataset['train'],
+            self.train_loader = torch.utils.data.DataLoader(self.dataset['train'], collate_fn=self.collate_fn,
                                                             batch_size=self.batch_size, shuffle=True,
-                                                       num_workers=11, persistent_workers=True)
+                                                    )
 
-            self.val_loader = torch.utils.data.DataLoader(self.dataset['validation'],
+            self.val_loader = torch.utils.data.DataLoader(self.dataset['validation'], collate_fn=self.collate_fn,
                                                           batch_size=self.batch_size, shuffle=False,
-                                                       num_workers=11, persistent_workers=True)
+                                                       )
             self._already_called["fit"] = True
             self._already_called["validate"] = True
 
