@@ -7,13 +7,12 @@ import loader
 import lightning as L
 from neptune.types import File
 from io import StringIO
-from ray.tune.integration.pytorch_lightning import TuneReportCallback
 
 
 default_config = {
     "lr": 1e-3,
-    "layers_count": 100,
-    "kernel_filter": 1000,
+    "layers_count": 1,
+    "hidden_size": 2048,
     "batch_size": 32,
 }
 
@@ -22,7 +21,7 @@ class DigitClassifier(L.LightningModule):
     def __init__(self, config: dict):
         super(DigitClassifier, self).__init__()
         self.layers_count = config['layers_count']
-        self.kernel_filter = config['kernel_filter']
+        self.hidden_size = config['hidden_size']
         self.lr = config['lr']
         self.save_hyperparameters(config)
 
@@ -31,12 +30,12 @@ class DigitClassifier(L.LightningModule):
 
         # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
-        self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=loader.CLASSES,
+        self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=self.hidden_size,
                                   num_layers=self.layers_count, batch_first=True)
-        self.cnv = nn.Conv2d(in_channels=1, out_channels=self.kernel_filter, kernel_size=(3, 3), padding=1)
+
+        self.linear = nn.Linear(in_features=self.hidden_size, out_features=loader.CLASSES)
 
         # same as weighted sum of the input
-        self.conv1 = nn.Conv2d(in_channels=self.kernel_filter, out_channels=1, kernel_size=(1, 1), padding=0, stride=1)
         self.relu = nn.ReLU()
         self.loss = nn.CTCLoss()
 
@@ -108,24 +107,15 @@ class DigitClassifier(L.LightningModule):
         :param x: (N, T, MFCC_FEATURES) where N is the batch size, T is the number of time steps and MFCC_FEATURES is the
         :return:
         """
+        # (N, T, MFCC_FEATURES)
         x = x.permute(0, 2, 1)
 
         # (N, MFCC_FEATURES, T)
-        res = self.lstm(x)
-        x = res[0]
+        x, _ = self.lstm(x)
         x = self.relu(x)
-        
+
         # (N, T, C)
-        x = x[:, None, :, :]
-
-        # (N, 1, T, C)
-        x = self.cnv(x)
-
-        # (N, self.kernel_filter, T, C)
-        x = self.conv1(x)
-
-        # (N, 1, T, C)
-        x = x.squeeze(1)
+        x = self.linear(x)
 
         # (N, T, C)
         x = nn.functional.log_softmax(x, dim=2)
@@ -164,8 +154,8 @@ class DigitClassifier(L.LightningModule):
     def on_validation_epoch_end(self):
         avg_loss = torch.stack(self.eval_loss).mean()
         avg_acc = torch.stack(self.eval_accuracy).mean()
-        self.log("val_loss", avg_loss, sync_dist=True)
-        self.log("val_accuracy", avg_acc, sync_dist=True)
+        self.log("avg_loss", avg_loss, sync_dist=True)
+        self.log("avg_accuracy", avg_acc, sync_dist=True)
         self.eval_loss.clear()
         self.eval_accuracy.clear()
 
@@ -193,7 +183,6 @@ def train_func(config=None, dm=None, model=None, logger=None, logger_config=None
         accelerator="auto",
         logger=logger,
         max_epochs=num_epochs,
-        callbacks=[TuneReportCallback(metrics, on="validation_end")],
     )
     trainer.fit(model, datamodule=dm)
 
