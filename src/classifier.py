@@ -184,9 +184,8 @@ def train_func(config=None, dm=None, model=None, logger=None, logger_config=None
         config = default_config
     if dm is None:
         dm = loader.AudioDataModule(batch_size=config['batch_size'])
-    if logger is None:
-        logger = NeptuneLogger(project=logger_config["project_name"], api_key=logger_config["api_key"],
-                               log_model_checkpoints=False)
+    if logger is None and logger_config is not None:
+        logger = NeptuneLogger(**logger_config)
 
     if model is None:
         n_feature = dm.train_loader.dataset.tensors[0].shape[1]
