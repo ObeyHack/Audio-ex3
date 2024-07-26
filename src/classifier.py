@@ -29,19 +29,19 @@ class DigitClassifier(L.LightningModule):
         self.eval_loss = []
         self.eval_accuracy = []
 
-        # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the # of time steps
+        # Input size:  FxT where F is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
-        self.conv1 = nn.Conv1d(in_channels=n_feature, out_channels=self.n_hidden,
-                               kernel_size=5, padding=2)
-        self.conv2 = nn.Conv1d(in_channels=self.n_hidden, out_channels=self.n_hidden,
-                               kernel_size=5, padding=2)
+        self.linear = nn.Linear(in_features=self.n_feature, out_features=self.n_hidden)
+
+        self.bi_rnn = torch.nn.RNN(self.n_hidden, self.n_hidden, num_layers=1, nonlinearity="relu", bidirectional=True)
 
         # self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=self.hidden_size,
         #                           num_layers=self.layers_count, batch_first=True)
 
-        self.linear = nn.Linear(in_features=self.n_hidden, out_features=self.n_class)
+        self.linear_final = nn.Linear(in_features=self.n_hidden, out_features=self.n_class)
 
-        # same as weighted sum of the input
+        # Non-layer modules
+        self.relu_max_clip = 20
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(config['dropout'])
         self.loss = nn.CTCLoss()
@@ -116,24 +116,22 @@ class DigitClassifier(L.LightningModule):
         """
 
         # (N, F, T)
-        x = self.conv1(x)
-
-        # (N, H, T)
-        x = self.relu(x)
-
-        # (N, H, T)
-        x = self.conv2(x)
-
-        # (N, H, T)
-        x = self.relu(x)
-        x = self.relu(x)
-        x = self.dropout(x)
-
-        # (N, H, T)
         x = x.permute(0, 2, 1)
 
-        # (N, T, H)
+        # (N, T, F)
         x = self.linear(x)
+
+        # (N, T, H)
+        x = self.relu(x)
+        x = torch.nn.functional.hardtanh(x, 0, self.relu_max_clip)
+        x = self.dropout(x)
+
+        # (N, T, H)
+        x, _ = self.bi_rnn(x)
+        x = x[:, :, : self.n_hidden] + x[:, :, self.n_hidden:]
+
+        # (N, T, H)
+        x = self.linear_final(x)
 
         # (N, T, C)
         x = nn.functional.log_softmax(x, dim=2)
