@@ -37,6 +37,7 @@ class DigitClassifier(L.LightningModule):
         self.eval_accuracy = []
 
         # Non-layer modules
+        self.batch_norm = nn.BatchNorm1d(self.n_hidden, affine=False)
         self.loss = nn.CTCLoss()
 
         # Input size:  FxT where F is the number of MFCC features and T is the # of time steps
@@ -47,10 +48,8 @@ class DigitClassifier(L.LightningModule):
                         nn.BatchNorm2d(self.out_channels, affine=False),
                         torch.nn.Hardtanh())
 
-        self.bi_rnn = nn.Sequential(
-                        nn.BatchNorm1d(self.n_hidden, affine=False),
-                        torch.nn.LSTM(self.n_hidden, self.n_hidden, num_layers=1,
-                            dropout=self.dropout, batch_first=True, bias=True, bidirectional=True))
+        self.bi_rnn = torch.nn.LSTM(self.n_hidden, self.n_hidden, num_layers=1,
+                            dropout=self.dropout, batch_first=True, bias=True, bidirectional=True)
 
         self.linear_final = nn.Linear(in_features=self.n_hidden*2, out_features=self.n_class)
 
@@ -73,6 +72,15 @@ class DigitClassifier(L.LightningModule):
 
         # (N, T, C_out, F)
         x = x.reshape(x.size(0), x.size(1), x.size(2) * x.size(3))
+
+        # (N, C_out * F,  T)
+        x = x.permute(0, 2, 1)
+
+        # (N, C_out * F,  T)
+        x = self.batch_norm(x)
+
+        # (N, T, C_out * F)
+        x = x.permute(0, 2, 1)
 
         # (N, T, C_out * F)
         x, _ = self.bi_rnn(x)
