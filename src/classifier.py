@@ -197,8 +197,8 @@ class DigitClassifier(L.LightningModule):
     def on_test_epoch_end(self):
         avg_loss = torch.stack(self.test_loss).mean()
         avg_acc = torch.stack(self.test_accuracy).mean()
-        self.log("val_avg_loss", avg_loss)
-        self.log("val_avg_accuracy", avg_acc)
+        self.log("test_avg_loss", avg_loss)
+        self.log("test_avg_accuracy", avg_acc)
         self.test_loss.clear()
         self.test_accuracy.clear()
 

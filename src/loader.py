@@ -212,7 +212,7 @@ class AudioDataModule(L.LightningDataModule):
             test_X, test_Y = get_set('test', self.data_dir)
             test_dataset = torch.utils.data.TensorDataset(test_X, test_Y)
             test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False,
-                                                      num_workers=11, persistent_workers=True)
+                                                      num_workers=1, persistent_workers=True)
             self.test_loader = test_loader
             self._already_called["test"] = True
 
