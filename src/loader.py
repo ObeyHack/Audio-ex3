@@ -13,7 +13,7 @@ import lightning as L
 
 zero_to_nine = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight',
                 9: 'nine'}
-BATCH_SIZE = 32                                        # Batch size
+BATCH_SIZE = 64                                        # Batch size
 TIME_STEPS = 8                                         # Input sequence length
 CLASSES = 26+1                                         # Number of classes (including blank)
 S_min = min([len(i) for i in zero_to_nine.values()])  # Minimum target length, for demonstration purposes,
@@ -50,9 +50,6 @@ def string_to_int(digit_str: str):
     :param digit_str: (N, ) or (, )
     :return: int or (N, )
     """
-    vals = list(zero_to_nine.values())
-    if digit_str not in vals:
-        return -1
     return list(zero_to_nine.values()).index(digit_str)
 
 

@@ -18,10 +18,9 @@ default_config = {
 
 
 class DigitClassifier(L.LightningModule):
-    def __init__(self, n_feature, n_time_steps, config: dict, n_class=loader.CLASSES):
+    def __init__(self, n_feature, config: dict, n_class=loader.CLASSES):
         super(DigitClassifier, self).__init__()
         self.n_feature = n_feature
-        self.n_time_steps = n_time_steps
         self.n_class = n_class
         self.n_hidden = config['n_hidden']
         self.lr = config['lr']
@@ -32,15 +31,15 @@ class DigitClassifier(L.LightningModule):
 
         # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
-        self.conv1 = nn.Conv1d(in_channels=n_time_steps, out_channels=self.n_hidden,
+        self.conv1 = nn.Conv1d(in_channels=n_feature, out_channels=self.n_hidden,
                                kernel_size=5, padding=2)
-        self.conv2 = nn.Conv1d(in_channels=self.n_hidden, out_channels=self.n_time_steps,
+        self.conv2 = nn.Conv1d(in_channels=self.n_hidden, out_channels=self.n_hidden,
                                kernel_size=5, padding=2)
 
         # self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=self.hidden_size,
         #                           num_layers=self.layers_count, batch_first=True)
 
-        self.linear = nn.Linear(in_features=self.n_feature, out_features=self.n_class)
+        self.linear = nn.Linear(in_features=self.n_hidden, out_features=self.n_class)
 
         # same as weighted sum of the input
         self.relu = nn.ReLU()
@@ -115,24 +114,25 @@ class DigitClassifier(L.LightningModule):
         :param x: (N, F, T) where N is the batch size, T is the number of time steps and F is the number of features
         :return:
         """
-        # (N, F, T)
-        x = x.permute(0, 2, 1)
 
-        # (N, T, F)
+        # (N, F, T)
         x = self.conv1(x)
 
-        # (N, n_hidden, F)
+        # (N, H, T)
         x = self.relu(x)
 
-        # (N, n_hidden, F)
+        # (N, H, T)
         x = self.conv2(x)
 
-        # (N, T, F)
+        # (N, H, T)
         x = self.relu(x)
         x = self.relu(x)
         x = self.dropout(x)
 
-        # (N, t, F)
+        # (N, H, T)
+        x = x.permute(0, 2, 1)
+
+        # (N, T, H)
         x = self.linear(x)
 
         # (N, T, C)
@@ -192,8 +192,7 @@ def train_func(config=None, dm=None, model=None, logger=None, logger_config=None
 
     if model is None:
         n_feature = dm.train_loader.dataset.tensors[0].shape[1]
-        n_time_steps = dm.train_loader.dataset.tensors[0].shape[2]
-        model = DigitClassifier(n_feature, n_time_steps, config)
+        model = DigitClassifier(n_feature, config)
 
 
     # log the hyperparameters and not the api key and project name
