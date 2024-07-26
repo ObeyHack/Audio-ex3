@@ -12,7 +12,7 @@ from io import StringIO
 
 default_config = {
     "lr": 1e-3,
-    "n_hidden": 512,
+    "n_hidden": 1024,
     "dropout": 0.1,
     "batch_size": loader.BATCH_SIZE,
 }
@@ -49,7 +49,7 @@ class DigitClassifier(L.LightningModule):
                         nn.BatchNorm2d(self.out_channels, affine=False),
                         torch.nn.Hardtanh())
 
-        self.bi_rnn = torch.nn.LSTM(self.n_feature, self.n_hidden, num_layers=1,
+        self.bi_rnn = torch.nn.GRU(self.n_feature, self.n_hidden, num_layers=1,
                             dropout=self.dropout, batch_first=True, bias=True, bidirectional=True)
 
         self.linear_final = nn.Linear(in_features=self.n_hidden*2, out_features=self.n_class)
