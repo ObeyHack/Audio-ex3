@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas as pd
 import torch
@@ -11,7 +13,7 @@ from io import StringIO
 
 default_config = {
     "lr": 1e-3,
-    "n_hidden": 2048,
+    "n_hidden": 512,
     "dropout": 0.1,
     "batch_size": 64,
 }
@@ -22,29 +24,68 @@ class DigitClassifier(L.LightningModule):
         super(DigitClassifier, self).__init__()
         self.n_feature = n_feature
         self.n_class = n_class
-        self.n_hidden = config['n_hidden']
+        self.in_channels = 1
+        self.out_channels = config['n_hidden'] // n_feature
+        self.n_hidden = self.out_channels * n_feature
         self.lr = config['lr']
+        self.dropout = config['dropout']
+
         self.save_hyperparameters(config)
 
+        # Evaluation metrics
         self.eval_loss = []
         self.eval_accuracy = []
 
+        # Non-layer modules
+        self.loss = nn.CTCLoss()
+
         # Input size:  FxT where F is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
-        self.linear = nn.Linear(in_features=self.n_feature, out_features=self.n_hidden)
+        self.conv = nn.Sequential(
+                        nn.Conv2d(in_channels=self.in_channels, out_channels=self.out_channels,
+                                  kernel_size=((self.n_class//2)*2+1, 5), padding=(self.n_class//2, 2), bias=False),
+                        nn.BatchNorm2d(self.out_channels, affine=False),
+                        torch.nn.Hardtanh())
 
-        self.bi_rnn = torch.nn.RNN(self.n_hidden, self.n_hidden, num_layers=1, nonlinearity="relu", bidirectional=True)
+        self.bi_rnn = nn.Sequential(
+                        nn.BatchNorm1d(self.n_hidden, affine=False),
+                        torch.nn.LSTM(self.n_hidden, self.n_hidden, num_layers=1,
+                            dropout=self.dropout, batch_first=True, bias=True, bidirectional=True))
 
-        # self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=self.hidden_size,
-        #                           num_layers=self.layers_count, batch_first=True)
+        self.linear_final = nn.Linear(in_features=self.n_hidden*2, out_features=self.n_class)
 
-        self.linear_final = nn.Linear(in_features=self.n_hidden, out_features=self.n_class)
+    def forward(self, x):
+        """
+        :param x: (N, F, T) where N is the batch size, T is the number of time steps and F is the number of features
+        :return:
+        """
+        # (N, F, T)
+        x = x.unsqueeze(1)
 
-        # Non-layer modules
-        self.relu_max_clip = 20
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(config['dropout'])
-        self.loss = nn.CTCLoss()
+        # (N, C_in, F, T)
+        x = x.permute(0, 1, 3, 2)
+
+        # (N, C_in, T, F)
+        x = self.conv(x)
+
+        # (N, C_out, T, F)
+        x = x.permute(0, 2, 1, 3)
+
+        # (N, T, C_out, F)
+        x = x.reshape(x.size(0), x.size(1), x.size(2) * x.size(3))
+
+        # (N, T, C_out * F)
+        x, _ = self.bi_rnn(x)
+
+        # (N, T, H)
+        x = self.linear_final(x)
+
+        # (N, T, C)
+        x = nn.functional.log_softmax(x, dim=2)
+        x = x.permute(1, 0, 2)
+
+        # (T, N, C)
+        return x
 
     def ctc_loss(self, y_hat, y):
         """
@@ -79,7 +120,7 @@ class DigitClassifier(L.LightningModule):
             :return: string
             """
             vals = loader.zero_to_nine.values()
-            loss = {vals: 0 for vals in vals}
+            loss = {vals: math.inf for vals in vals}
             for i, val in enumerate(vals):
                 encoded_digit = loader.encode_digit(i)
                 loss[val] = self.loss(y_hat,encoded_digit, y_hat.shape[:1], encoded_digit.shape[:1])
@@ -108,37 +149,6 @@ class DigitClassifier(L.LightningModule):
 
         acc = torch.sum(torch.eq(digits, digits_hat)) / len(digits)
         return acc
-
-    def forward(self, x):
-        """
-        :param x: (N, F, T) where N is the batch size, T is the number of time steps and F is the number of features
-        :return:
-        """
-
-        # (N, F, T)
-        x = x.permute(0, 2, 1)
-
-        # (N, T, F)
-        x = self.linear(x)
-
-        # (N, T, H)
-        x = self.relu(x)
-        x = torch.nn.functional.hardtanh(x, 0, self.relu_max_clip)
-        x = self.dropout(x)
-
-        # (N, T, H)
-        x, _ = self.bi_rnn(x)
-        x = x[:, :, : self.n_hidden] + x[:, :, self.n_hidden:]
-
-        # (N, T, H)
-        x = self.linear_final(x)
-
-        # (N, T, C)
-        x = nn.functional.log_softmax(x, dim=2)
-        x = x.permute(1, 0, 2)
-
-        # (T, N, C)
-        return x
 
     def training_step(self, batch, batch_idx):
         x, y = batch
@@ -170,8 +180,8 @@ class DigitClassifier(L.LightningModule):
     def on_validation_epoch_end(self):
         avg_loss = torch.stack(self.eval_loss).mean()
         avg_acc = torch.stack(self.eval_accuracy).mean()
-        self.log("avg_loss", avg_loss, sync_dist=True)
-        self.log("avg_accuracy", avg_acc, sync_dist=True)
+        self.log("avg_loss", avg_loss, on_epoch=True)
+        self.log("avg_accuracy", avg_acc, on_epoch=True)
         self.eval_loss.clear()
         self.eval_accuracy.clear()
 
@@ -191,11 +201,9 @@ def train_func(config=None, dm=None, model=None, logger=None, logger_config=None
         n_feature = dm.train_loader.dataset.tensors[0].shape[1]
         model = DigitClassifier(n_feature, config)
 
-
     # log the hyperparameters and not the api key and project name
     logger.run["parameters"] = config
 
-    metrics = {"loss": "val_loss", "acc": "val_accuracy"}
     trainer = L.Trainer(
         devices="auto",
         accelerator="auto",
