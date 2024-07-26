@@ -196,16 +196,18 @@ class AudioDataModule(L.LightningDataModule):
             return
 
         if stage == "fit":
+            validation_X, validation_Y = get_set('val', self.data_dir)
+            validation_dataset = torch.utils.data.TensorDataset(validation_X, validation_Y)
+            validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=self.batch_size,
+                                                            shuffle=False,
+                                                            num_workers=11, persistent_workers=True)
+            self.val_loader = validation_loader
+
             train_X, train_Y = get_set('train', self.data_dir)
             train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
             train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True,
                                                        num_workers=11, persistent_workers=True)
             self.train_loader = train_loader
-            validation_X, validation_Y = get_set('val', self.data_dir)
-            validation_dataset = torch.utils.data.TensorDataset(validation_X, validation_Y)
-            validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=self.batch_size, shuffle=False,
-                                                            num_workers=11, persistent_workers=True)
-            self.val_loader = validation_loader
             self._already_called["fit"] = True
             self._already_called["validate"] = True
 
