@@ -13,8 +13,8 @@ import lightning as L
 
 zero_to_nine = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight',
                 9: 'nine'}
-BATCH_SIZE = 64                                        # Batch size
-TIME_STEPS = 8                                         # Input sequence length
+BATCH_SIZE = 32                                        # Batch size
+TIME_STEPS = 32                                        # Input sequence length
 CLASSES = 26+1                                         # Number of classes (including blank)
 S_min = min([len(i) for i in zero_to_nine.values()])  # Minimum target length, for demonstration purposes,
                                                             # shortest word is 'one' with 3 letters

@@ -1,10 +1,9 @@
 import math
-
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from lightning.pytorch.loggers import NeptuneLogger
+from pytorch_lightning.loggers import NeptuneLogger
 import loader
 import lightning as L
 from neptune.types import File
@@ -15,7 +14,7 @@ default_config = {
     "lr": 1e-3,
     "n_hidden": 512,
     "dropout": 0.1,
-    "batch_size": 64,
+    "batch_size": loader.BATCH_SIZE,
 }
 
 
@@ -35,9 +34,11 @@ class DigitClassifier(L.LightningModule):
         # Evaluation metrics
         self.eval_loss = []
         self.eval_accuracy = []
+        self.test_loss = []
+        self.test_accuracy = []
 
         # Non-layer modules
-        self.batch_norm = nn.BatchNorm1d(self.n_hidden, affine=True)
+        self.batch_norm = nn.BatchNorm1d(self.n_hidden, affine=False)
         self.loss = nn.CTCLoss()
 
         # Input size:  FxT where F is the number of MFCC features and T is the # of time steps
@@ -45,7 +46,7 @@ class DigitClassifier(L.LightningModule):
         self.conv = nn.Sequential(
                         nn.Conv2d(in_channels=self.in_channels, out_channels=self.out_channels,
                                   kernel_size=((self.n_class//2)*2+1, 7), padding=(self.n_class//2, 3), bias=True),
-                        nn.BatchNorm2d(self.out_channels, affine=True),
+                        nn.BatchNorm2d(self.out_channels, affine=False),
                         torch.nn.Hardtanh())
 
         self.bi_rnn = torch.nn.LSTM(self.n_hidden, self.n_hidden, num_layers=1,
@@ -108,7 +109,7 @@ class DigitClassifier(L.LightningModule):
         label_length = torch.tensor([len(label) for label in un_padded_y]) * torch.ones(batch_size, dtype=torch.long)
 
         # The input length is number of time steps
-        input_lengths = torch.full(size=(batch_size,), fill_value=loader.TIME_STEPS, dtype=torch.long)
+        input_lengths = torch.full(size=(batch_size,), fill_value=y_hat.shape[0], dtype=torch.long)
         return self.loss(y_hat, y, input_lengths, label_length)
 
     def predict(self, y_hat):
@@ -180,15 +181,26 @@ class DigitClassifier(L.LightningModule):
         y_hat = self(x)
         loss = self.ctc_loss(y_hat, y)
         acc = self.accuracy(y_hat, y)
-        return {"val_loss": loss, "val_accuracy": acc}
+
+        self.test_loss.append(loss)
+        self.test_accuracy.append(acc)
+        return {"test_loss": loss, "test_accuracy": acc}
 
     def on_validation_epoch_end(self):
         avg_loss = torch.stack(self.eval_loss).mean()
         avg_acc = torch.stack(self.eval_accuracy).mean()
-        self.log("avg_loss", avg_loss)
-        self.log("avg_accuracy", avg_acc)
+        self.log("val_avg_loss", avg_loss)
+        self.log("val_avg_accuracy", avg_acc)
         self.eval_loss.clear()
         self.eval_accuracy.clear()
+
+    def on_test_epoch_end(self):
+        avg_loss = torch.stack(self.test_loss).mean()
+        avg_acc = torch.stack(self.test_accuracy).mean()
+        self.log("val_avg_loss", avg_loss)
+        self.log("val_avg_accuracy", avg_acc)
+        self.test_loss.clear()
+        self.test_accuracy.clear()
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
