@@ -11,17 +11,19 @@ from io import StringIO
 
 default_config = {
     "lr": 1e-3,
-    "layers_count": 1,
-    "hidden_size": 2048,
-    "batch_size": 32,
+    "n_hidden": 2048,
+    "dropout": 0.1,
+    "batch_size": 64,
 }
 
 
 class DigitClassifier(L.LightningModule):
-    def __init__(self, config: dict):
+    def __init__(self, n_feature, n_time_steps, config: dict, n_class=loader.CLASSES):
         super(DigitClassifier, self).__init__()
-        self.layers_count = config['layers_count']
-        self.hidden_size = config['hidden_size']
+        self.n_feature = n_feature
+        self.n_time_steps = n_time_steps
+        self.n_class = n_class
+        self.n_hidden = config['n_hidden']
         self.lr = config['lr']
         self.save_hyperparameters(config)
 
@@ -30,13 +32,19 @@ class DigitClassifier(L.LightningModule):
 
         # Input size:  MFCC_FEATURESxT where MFCC_FEATURES is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
-        self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=self.hidden_size,
-                                  num_layers=self.layers_count, batch_first=True)
+        self.conv1 = nn.Conv1d(in_channels=n_time_steps, out_channels=self.n_hidden,
+                               kernel_size=5, padding=2)
+        self.conv2 = nn.Conv1d(in_channels=self.n_hidden, out_channels=self.n_time_steps,
+                               kernel_size=5, padding=2)
 
-        self.linear = nn.Linear(in_features=self.hidden_size, out_features=loader.CLASSES)
+        # self.lstm = torch.nn.LSTM(input_size=loader.MFCC_FEATURES, hidden_size=self.hidden_size,
+        #                           num_layers=self.layers_count, batch_first=True)
+
+        self.linear = nn.Linear(in_features=self.n_feature, out_features=self.n_class)
 
         # same as weighted sum of the input
         self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(config['dropout'])
         self.loss = nn.CTCLoss()
 
     def ctc_loss(self, y_hat, y):
@@ -71,7 +79,7 @@ class DigitClassifier(L.LightningModule):
             :param y_hat: shape (T, C)
             :return: string
             """
-            vals = loader.zero_to_eight.values()
+            vals = loader.zero_to_nine.values()
             loss = {vals: 0 for vals in vals}
             for i, val in enumerate(vals):
                 encoded_digit = loader.encode_digit(i)
@@ -104,17 +112,27 @@ class DigitClassifier(L.LightningModule):
 
     def forward(self, x):
         """
-        :param x: (N, T, MFCC_FEATURES) where N is the batch size, T is the number of time steps and MFCC_FEATURES is the
+        :param x: (N, F, T) where N is the batch size, T is the number of time steps and F is the number of features
         :return:
         """
-        # (N, T, MFCC_FEATURES)
+        # (N, F, T)
         x = x.permute(0, 2, 1)
 
-        # (N, MFCC_FEATURES, T)
-        x, _ = self.lstm(x)
+        # (N, T, F)
+        x = self.conv1(x)
+
+        # (N, n_hidden, F)
         x = self.relu(x)
 
-        # (N, T, C)
+        # (N, n_hidden, F)
+        x = self.conv2(x)
+
+        # (N, T, F)
+        x = self.relu(x)
+        x = self.relu(x)
+        x = self.dropout(x)
+
+        # (N, t, F)
         x = self.linear(x)
 
         # (N, T, C)
@@ -168,11 +186,15 @@ def train_func(config=None, dm=None, model=None, logger=None, logger_config=None
         config = default_config
     if dm is None:
         dm = loader.AudioDataModule(batch_size=config['batch_size'])
-    if model is None:
-        model = DigitClassifier(config)
     if logger is None:
         logger = NeptuneLogger(project=logger_config["project_name"], api_key=logger_config["api_key"],
                                log_model_checkpoints=False)
+
+    if model is None:
+        n_feature = dm.train_loader.dataset.tensors[0].shape[1]
+        n_time_steps = dm.train_loader.dataset.tensors[0].shape[2]
+        model = DigitClassifier(n_feature, n_time_steps, config)
+
 
     # log the hyperparameters and not the api key and project name
     logger.run["parameters"] = config

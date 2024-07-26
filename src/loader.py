@@ -11,13 +11,14 @@ import lightning as L
 ################################################# Constants ############################################################
 ########################################################################################################################
 
-zero_to_eight = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight'}
+zero_to_nine = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight',
+                9: 'nine'}
 BATCH_SIZE = 32                                        # Batch size
 TIME_STEPS = 8                                         # Input sequence length
 CLASSES = 26+1                                         # Number of classes (including blank)
-S_min = min([len(i) for i in zero_to_eight.values()])  # Minimum target length, for demonstration purposes,
+S_min = min([len(i) for i in zero_to_nine.values()])  # Minimum target length, for demonstration purposes,
                                                             # shortest word is 'one' with 3 letters
-S_max = max([len(i) for i in zero_to_eight.values()])  # Maximum target length, for demonstration purposes,
+S_max = max([len(i) for i in zero_to_nine.values()])  # Maximum target length, for demonstration purposes,
                                                             # longest word is 'three' with 5 letters
 PADDING_VALUE = 0                                      # Padding value for the input sequence
 MFCC_FEATURES = 13                                     # Number of MFCC features
@@ -35,9 +36,9 @@ def encode_digit(digit: int):
     :param digit: The digit to encode
     :return: The tensor of size CLASSES
     """
-    encoded_digit = torch.zeros(len(zero_to_eight[digit]))
+    encoded_digit = torch.zeros(len(zero_to_nine[digit]))
     for i in range(len(encoded_digit)):
-        char_i = zero_to_eight[digit][i]
+        char_i = zero_to_nine[digit][i]
         # encode the character
         encoded_digit[i] = ord(char_i) - 96
     return encoded_digit
@@ -49,10 +50,10 @@ def string_to_int(digit_str: str):
     :param digit_str: (N, ) or (, )
     :return: int or (N, )
     """
-    vals = list(zero_to_eight.values())
+    vals = list(zero_to_nine.values())
     if digit_str not in vals:
         return -1
-    return list(zero_to_eight.values()).index(digit_str)
+    return list(zero_to_nine.values()).index(digit_str)
 
 
 def decode_digit(encoded_digit: torch.Tensor):
@@ -134,10 +135,10 @@ def get_paths(set, root_path):
     """
     # loop on every directory in the set directory (0-8) and get the path of every file in it
     paths = []
-    for i in zero_to_eight:
+    for i in zero_to_nine:
         path_i = []
-        for file in os.listdir(os.path.join(*[root_path, set, zero_to_eight[i]])):
-            path_i.append(os.path.join(*[root_path, set, zero_to_eight[i], file]))
+        for file in os.listdir(os.path.join(*[root_path, set, zero_to_nine[i]])):
+            path_i.append(os.path.join(*[root_path, set, zero_to_nine[i], file]))
         paths.append(path_i)
     return paths
 
@@ -145,12 +146,12 @@ def get_paths(set, root_path):
 def get_set(set, root_path="data"):
     paths = get_paths(set, root_path)
     Y = []
-    for i in range(len(zero_to_eight)):
+    for i in range(len(zero_to_nine)):
         for _ in paths[i]:
             Y.append(encode_digit(i))
 
     X = []
-    for i in range(len(zero_to_eight)):
+    for i in range(len(zero_to_nine)):
         for file in paths[i]:
             X.append(torch.tensor(extract_mfcc(file)).T)
 
