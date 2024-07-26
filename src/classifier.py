@@ -37,15 +37,15 @@ class DigitClassifier(L.LightningModule):
         self.eval_accuracy = []
 
         # Non-layer modules
-        self.batch_norm = nn.BatchNorm1d(self.n_hidden, affine=False)
+        self.batch_norm = nn.BatchNorm1d(self.n_hidden, affine=True)
         self.loss = nn.CTCLoss()
 
         # Input size:  FxT where F is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
         self.conv = nn.Sequential(
                         nn.Conv2d(in_channels=self.in_channels, out_channels=self.out_channels,
-                                  kernel_size=((self.n_class//2)*2+1, 5), padding=(self.n_class//2, 2), bias=False),
-                        nn.BatchNorm2d(self.out_channels, affine=False),
+                                  kernel_size=((self.n_class//2)*2+1, 7), padding=(self.n_class//2, 3), bias=True),
+                        nn.BatchNorm2d(self.out_channels, affine=True),
                         torch.nn.Hardtanh())
 
         self.bi_rnn = torch.nn.LSTM(self.n_hidden, self.n_hidden, num_layers=1,
@@ -68,13 +68,10 @@ class DigitClassifier(L.LightningModule):
         x = self.conv(x)
 
         # (N, C_out, T, F)
-        x = x.permute(0, 2, 1, 3)
+        x = x.permute(0, 1, 3, 2)
 
-        # (N, T, C_out, F)
-        x = x.reshape(x.size(0), x.size(1), x.size(2) * x.size(3))
-
-        # (N, C_out * F,  T)
-        x = x.permute(0, 2, 1)
+        # (N, C_out, F, T)
+        x = x.reshape(x.size(0), x.size(1) * x.size(2), x.size(3))
 
         # (N, C_out * F,  T)
         x = self.batch_norm(x)
@@ -188,8 +185,8 @@ class DigitClassifier(L.LightningModule):
     def on_validation_epoch_end(self):
         avg_loss = torch.stack(self.eval_loss).mean()
         avg_acc = torch.stack(self.eval_accuracy).mean()
-        self.log("avg_loss", avg_loss, on_epoch=True)
-        self.log("avg_accuracy", avg_acc, on_epoch=True)
+        self.log("avg_loss", avg_loss)
+        self.log("avg_accuracy", avg_acc)
         self.eval_loss.clear()
         self.eval_accuracy.clear()
 
