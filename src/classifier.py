@@ -43,11 +43,6 @@ class DigitClassifier(L.LightningModule):
 
         # Input size:  FxT where F is the number of MFCC features and T is the # of time steps
         # Output size: TxC where T is the number of time steps and C is the number of classes
-        self.conv = nn.Sequential(
-                        nn.Conv2d(in_channels=self.in_channels, out_channels=self.out_channels,
-                                  kernel_size=((self.n_class//2)*2+1, 7), padding=(self.n_class//2, 3), bias=True),
-                        nn.BatchNorm2d(self.out_channels, affine=False),
-                        torch.nn.Hardtanh())
 
         self.bi_rnn = torch.nn.GRU(self.n_feature, self.n_hidden, num_layers=1,
                             dropout=self.dropout, batch_first=True, bias=True, bidirectional=True)
@@ -59,21 +54,6 @@ class DigitClassifier(L.LightningModule):
         :param x: (N, F, T) where N is the batch size, T is the number of time steps and F is the number of features
         :return:
         """
-        # (N, F, T)
-        # x = x.unsqueeze(1)
-        #
-        # # (N, C_in, F, T)
-        # x = x.permute(0, 1, 3, 2)
-        #
-        # # (N, C_in, T, F)
-        # x = self.conv(x)
-        #
-        # # (N, C_out, T, F)
-        # x = x.permute(0, 1, 3, 2)
-        #
-        # # (N, C_out, F, T)
-        # x = x.reshape(x.size(0), x.size(1) * x.size(2), x.size(3))
-
         # (N, H= C_out * F,  T)
         x = self.batch_norm(x)
 
